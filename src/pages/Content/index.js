@@ -116,18 +116,40 @@ function applyDensityFilter(danmakuList, videoDuration, targetMaxDensity = null,
     if (!targetMaxDensity) {
         const video = document.querySelector('video');
         const height = video ? video.offsetHeight : 450;
+        const width = video ? video.offsetWidth : 800;
+
+        // Calculate window size factor (base reference is 715x402)
+        const baseWidth = 715;
+        const baseHeight = 402;
+        const areaFactor = Math.sqrt((width * height) / (baseWidth * baseHeight));
+        console.log('🍥 Window size factor:', areaFactor, `(${width}x${height} vs ${baseWidth}x${baseHeight})`);
+
         // Estimate how many comments can fit vertically with some spacing
-        const lineHeight = Math.min(height / 20, 25) * 1.5; // Comment height + spacing
+        const lineHeight = Math.min(height / 16, 30) * 1.5; // Increased base size from 20 to 16 (larger text)
         const availableLines = Math.floor(height / lineHeight);
+
         // Target density is number of comments that can fit on screen in the window
-        // Much more conservative multiplier (0.8 instead of 2) to avoid overcrowding
-        targetMaxDensity = Math.max(5, Math.floor(availableLines * 0.8));
+        // Scale based on window size relative to base size
+        const baseDensity = Math.floor(availableLines * 1.2);
+        targetMaxDensity = Math.max(8, Math.floor(baseDensity * areaFactor));
 
-        // Limit maximum density based on screen size
-        const maxAllowedDensity = 35; // Cap for very large screens
-        targetMaxDensity = Math.min(targetMaxDensity, maxAllowedDensity);
+        // Dynamic maximum density based on window size
+        const baseMaxDensity = 45;
+        const maxAllowedDensity = Math.floor(baseMaxDensity * areaFactor);
 
-        console.log('🍥 Calculated target density:', targetMaxDensity, 'from', availableLines, 'available lines');
+        // Apply bounds to prevent extremes
+        targetMaxDensity = Math.min(
+            Math.max(targetMaxDensity, 8), // Minimum of 8
+            Math.min(maxAllowedDensity, 90) // Hard cap at 90 regardless of size
+        );
+
+        console.log('🍥 Density calculations:', {
+            areaFactor,
+            availableLines,
+            baseDensity,
+            targetMaxDensity,
+            maxAllowedDensity
+        });
     }
 
     // Calculate window size in milliseconds
@@ -161,23 +183,31 @@ function applyDensityFilter(danmakuList, videoDuration, targetMaxDensity = null,
     const maxDensityWindow = timeWindows.reduce((max, window) =>
         window.count > max.count ? window : max, { count: 0 });
 
-    // Calculate scaling factor - apply more aggressive scaling
+    // Calculate scaling factor - less aggressive scaling
     let scalingFactor = maxDensityWindow.count > targetMaxDensity
         ? targetMaxDensity / maxDensityWindow.count
         : 1.0;
 
-    // Apply additional reduction to make it even less dense (reduce by another 30%)
-    scalingFactor = Math.min(scalingFactor * 0.7, 0.75);
+    // Apply a smaller reduction (15% instead of 30%)
+    // For larger windows, reduce the scaling reduction to maintain better density
+    const video = document.querySelector('video');
+    const width = video ? video.offsetWidth : 800;
+    const height = video ? video.offsetHeight : 450;
+    const areaFactor = Math.sqrt((width * height) / (715 * 402));
+    const reductionFactor = Math.max(0.85, Math.min(0.95, 0.85 + (areaFactor - 1) * 0.1));
+
+    scalingFactor = Math.min(scalingFactor * reductionFactor, reductionFactor);
 
     console.log('🍥 Density analysis:', {
         maxDensity: maxDensityWindow.count,
         targetDensity: targetMaxDensity,
         scalingFactor: scalingFactor,
+        reductionFactor,
         maxDensityTimeWindow: `${maxDensityWindow.start / 1000}s-${maxDensityWindow.end / 1000}s`
     });
 
     // More strict threshold for no filtering - only if very sparse
-    if (scalingFactor >= 0.75 && maxDensityWindow.count < 10) {
+    if (scalingFactor >= reductionFactor && maxDensityWindow.count < Math.max(10, Math.floor(10 * areaFactor))) {
         console.log('🍥 Density is acceptable, no filtering needed');
         return danmakuList;
     }
@@ -416,15 +446,15 @@ function setupDanmakuOverlay(dList) {
 
         // Format and load comments with improved timing
         const formattedComments = filteredComments.map(c => {
-            // Ensure comment is within bounds
-            const baseSize = Math.min(height / 20, 25); // Slightly smaller for density
+            // Increase base size for all comments
+            const baseSize = Math.min(height / 16, 30); // Changed from height/20 to height/16, max 30px
             return {
                 text: c.text,
                 mode: 1, // Scrolling right to left
-                stime: (typeof c.time === 'number' ? c.time : c.stime) * 1000, // Convert to milliseconds
-                dur: 8000 + Math.round(width / 2), // Duration based on screen width plus base time
+                stime: (typeof c.time === 'number' ? c.time : c.stime) * 1000,
+                dur: 8000 + Math.round(width / 2),
                 color: c.color || 0xffffff,
-                size: c.size || baseSize,
+                size: c.size ? Math.round(c.size * 1.2) : baseSize, // Increase existing sizes by 20%
                 border: false,
                 shadow: true
             };
@@ -437,12 +467,12 @@ function setupDanmakuOverlay(dList) {
         // This helps with distributing comments randomly across vertical space
         commentManager.options.density = 1.2; // Slightly higher to allow more density in good spots
 
-        // Calculate lane height
+        // Update the lane height calculation for the allocator
         const tempStyle = document.createElement('div');
         tempStyle.className = 'cmt';
         tempStyle.style.position = 'absolute';
         tempStyle.style.visibility = 'hidden';
-        tempStyle.style.fontSize = `${Math.min(height / 20, 25)}px`;
+        tempStyle.style.fontSize = `${Math.min(height / 16, 30)}px`; // Match the new base size
         tempStyle.textContent = 'Test';
         document.body.appendChild(tempStyle);
         const lineHeight = tempStyle.offsetHeight;
