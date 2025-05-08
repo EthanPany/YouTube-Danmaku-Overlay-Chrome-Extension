@@ -36,10 +36,14 @@ const authorNameStyles = {
     fontWeight: 'normal',
     fontSize: '11px',
     color: '#ccc',
-    whiteSpace: 'nowrap',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
-    maxWidth: '100px', // Limit author name width
+    maxWidth: '150px', // Increased from 100px
+    wordBreak: 'break-all', // Allow breaking at any character
+    display: '-webkit-box',
+    WebkitLineClamp: 2, // Allow up to 2 lines
+    WebkitBoxOrient: 'vertical',
+    lineHeight: '1.2',
 };
 
 const contentStyles = {
@@ -88,11 +92,12 @@ const metadataContainerStyles = {
 
 const metadataLineStyles = {
     display: 'flex',
-    alignItems: 'center',
+    alignItems: 'flex-start', // Changed from center to allow proper wrapping
     gap: '6px',
-    flexWrap: 'wrap', // Allow wrapping if needed, though aiming for compact
+    flexWrap: 'wrap', // Allow wrapping if needed
     fontSize: '11px',
     color: '#aaa',
+    lineHeight: '1.2',
 };
 
 const metadataSeparator = {

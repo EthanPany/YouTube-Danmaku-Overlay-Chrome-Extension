@@ -6,6 +6,26 @@ import { findBestMatch } from './modules/match';
 import DanmakuMatchPopup from '../../containers/DanmakuMatchPopup/DanmakuMatchPopup';
 import { CommentManager } from './CommentCoreLibrary';
 
+const DEBUG = true; // Can be toggled for production
+
+function debugLog(...args) {
+    if (DEBUG) {
+        console.log('🍥', ...args);
+    }
+}
+
+function debugWarn(...args) {
+    if (DEBUG) {
+        console.warn('🍥', ...args);
+    }
+}
+
+function debugError(...args) {
+    if (DEBUG) {
+        console.error('🍥', ...args);
+    }
+}
+
 console.log('🍥 YouTube Danmaku Overlay Content Script Loaded 🍥');
 
 const EXTENSION_ROOT_ID = 'youtube-danmaku-overlay-root';
@@ -30,28 +50,52 @@ function getYouTubeVideoId() {
     return urlParams.get('v');
 }
 
+function cleanupDanmakuOverlay() {
+    // Clean up comment manager
+    if (commentManager) {
+        commentManager.stop();
+        commentManager.clear();
+        commentManager = null;
+    }
+
+    // Clean up video event listeners
+    const video = document.querySelector('video');
+    if (video && video._danmakuListeners) {
+        Object.entries(video._danmakuListeners).forEach(([event, listener]) => {
+            video.removeEventListener(event, listener);
+        });
+        video._danmakuListeners = null;
+    }
+
+    // Clean up resize observer
+    if (video && video._resizeObserver) {
+        video._resizeObserver.disconnect();
+        video._resizeObserver = null;
+    }
+
+    // Remove overlay container
+    const overlayDiv = document.getElementById(DANMAKU_OVERLAY_ID);
+    if (overlayDiv) {
+        overlayDiv.remove();
+    }
+}
+
 function cleanupUI(fullReset = true) {
-    const existingPopupRoot = document.getElementById(BILIBILI_POPUP_ID);
-    if (existingPopupRoot && reactRoot) {
-        reactRoot.unmount();
-        existingPopupRoot.remove();
-        reactRoot = null;
+    // First clean up any existing danmaku overlay
+    cleanupDanmakuOverlay();
+
+    // Remove popup container
+    const popupDiv = document.getElementById(BILIBILI_POPUP_ID);
+    if (popupDiv) {
+        popupDiv.remove();
     }
-    const existingOverlay = document.getElementById(DANMAKU_OVERLAY_ID);
-    if (existingOverlay) {
-        if (commentManager) {
-            commentManager.clear();
-            commentManager.stop(); // Ensure CM is stopped
-            commentManager = null;
-        }
-        existingOverlay.remove();
-    }
-    isPopupVisible = false;
+
     if (fullReset) {
+        currentVideoId = null;
         matchedBiliData = null;
+        isPopupVisible = false;
         danmakuList = [];
-        currentVideoId = null; // Clear video ID on full cleanup
-        currentOverlayState = false; // Reset state assumption
+        currentOverlayState = false;
     }
 }
 
@@ -110,7 +154,7 @@ function applyDensityFilter(danmakuList, videoDuration, targetMaxDensity = null,
         return danmakuList;
     }
 
-    console.log('🍥 Starting density filter analysis for', danmakuList.length, 'comments');
+    debugLog('🍥 Starting density filter analysis for', danmakuList.length, 'comments');
 
     // Set target density based on screen dimensions if not specified
     if (!targetMaxDensity) {
@@ -122,7 +166,7 @@ function applyDensityFilter(danmakuList, videoDuration, targetMaxDensity = null,
         const baseWidth = 715;
         const baseHeight = 402;
         const areaFactor = Math.sqrt((width * height) / (baseWidth * baseHeight));
-        console.log('🍥 Window size factor:', areaFactor, `(${width}x${height} vs ${baseWidth}x${baseHeight})`);
+        debugLog('🍥 Window size factor:', areaFactor, `(${width}x${height} vs ${baseWidth}x${baseHeight})`);
 
         // Estimate how many comments can fit vertically with some spacing
         const lineHeight = Math.min(height / 16, 30) * 1.5; // Increased base size from 20 to 16 (larger text)
@@ -143,7 +187,7 @@ function applyDensityFilter(danmakuList, videoDuration, targetMaxDensity = null,
             Math.min(maxAllowedDensity, 90) // Hard cap at 90 regardless of size
         );
 
-        console.log('🍥 Density calculations:', {
+        debugLog('🍥 Density calculations:', {
             areaFactor,
             availableLines,
             baseDensity,
@@ -216,7 +260,7 @@ function applyDensityFilter(danmakuList, videoDuration, targetMaxDensity = null,
 
     scalingFactor = Math.min(scalingFactor * reductionFactor, reductionFactor);
 
-    console.log('🍥 Density analysis:', {
+    debugLog('🍥 Density analysis:', {
         maxDensity: maxDensityWindow.smoothedCount,
         targetDensity: targetMaxDensity,
         scalingFactor: scalingFactor,
@@ -226,7 +270,7 @@ function applyDensityFilter(danmakuList, videoDuration, targetMaxDensity = null,
 
     // More strict threshold for no filtering - only if very sparse
     if (scalingFactor >= reductionFactor && maxDensityWindow.smoothedCount < Math.max(10, Math.floor(10 * areaFactor))) {
-        console.log('🍥 Density is acceptable, no filtering needed');
+        debugLog('🍥 Density is acceptable, no filtering needed');
         return danmakuList;
     }
 
@@ -287,7 +331,7 @@ function applyDensityFilter(danmakuList, videoDuration, targetMaxDensity = null,
     const uniqueFiltered = Array.from(new Set(filteredList.map(c => JSON.stringify(c))))
         .map(s => JSON.parse(s));
 
-    console.log('🍥 Filtered danmaku list from', danmakuList.length, 'to', uniqueFiltered.length, 'comments');
+    debugLog('🍥 Filtered danmaku list from', danmakuList.length, 'to', uniqueFiltered.length, 'comments');
 
     return uniqueFiltered;
 }
@@ -295,7 +339,7 @@ function applyDensityFilter(danmakuList, videoDuration, targetMaxDensity = null,
 async function handleShowDanmakuToggle(newState, biliId) {
     if (!currentVideoId || !matchedBiliData) return;
 
-    console.log(`🍥 Toggling Danmaku Overlay to: ${newState}`);
+    debugLog(`🍥 Toggling Danmaku Overlay to: ${newState}`);
     currentOverlayState = newState; // Update our tracked state
 
     // Save the new state to storage
@@ -303,26 +347,26 @@ async function handleShowDanmakuToggle(newState, biliId) {
     if (storageKey) {
         chrome.storage.local.set({ [storageKey]: newState }, () => {
             if (chrome.runtime.lastError) {
-                console.error('Error saving toggle state:', chrome.runtime.lastError);
+                debugError('Error saving toggle state:', chrome.runtime.lastError);
             } else {
-                console.log(`🍥 Toggle state (${newState}) saved for ${storageKey}`);
+                debugLog(`🍥 Toggle state (${newState}) saved for ${storageKey}`);
             }
         });
     }
 
     // Show/Hide logic based on the new state
     if (newState) { // Show Overlay
-        console.log('🍥 Attempting to show danmaku...');
+        debugLog('🍥 Attempting to show danmaku...');
         let cid = matchedBiliData.cid;
         // Fetch CID if needed (ensure matchedBiliData has bvid)
         if (!cid && matchedBiliData.bvid) {
-            console.warn("🍥 Matched Bilibili data doesn't have CID, fetching...");
+            debugWarn("🍥 Matched Bilibili data doesn't have CID, fetching...");
             const details = await getBilibiliVideoDetails(matchedBiliData.bvid);
             if (details && details.cid) {
                 cid = details.cid;
                 matchedBiliData.cid = cid; // Update stored data
             } else {
-                console.error('🍥 Failed to get CID for matched video. Cannot load danmaku.');
+                debugError('🍥 Failed to get CID for matched video. Cannot load danmaku.');
                 // Do not revert toggle state here. User explicitly turned it on.
                 // The popup will still reflect the 'on' state.
                 // An error message could be displayed to the user if desired.
@@ -331,14 +375,14 @@ async function handleShowDanmakuToggle(newState, biliId) {
         }
 
         if (!cid) {
-            console.error('🍥 Cannot show danmaku without CID.');
+            debugError('🍥 Cannot show danmaku without CID.');
             // Do not revert toggle state here.
             return;
         }
 
         // Fetch or use cached Danmaku
         if (danmakuList && danmakuList.length > 0) {
-            console.log('🍥 Using cached danmaku list.');
+            debugLog('🍥 Using cached danmaku list.');
             setupDanmakuOverlay(danmakuList);
         } else {
             const fetchedDanmaku = await fetchDanmaku(cid);
@@ -346,13 +390,13 @@ async function handleShowDanmakuToggle(newState, biliId) {
                 danmakuList = fetchedDanmaku;
                 setupDanmakuOverlay(danmakuList);
             } else {
-                console.error('🍥 Failed to fetch danmaku.');
+                debugError('🍥 Failed to fetch danmaku.');
                 // Do not revert toggle state here.
                 // An error message could be displayed to the user.
             }
         }
     } else { // Hide Overlay
-        console.log('🍥 Hiding danmaku...');
+        debugLog('🍥 Hiding danmaku...');
         const overlay = document.getElementById(DANMAKU_OVERLAY_ID);
         if (overlay) {
             if (commentManager) {
@@ -383,7 +427,7 @@ function setupDanmakuOverlay(dList) {
         if (playerElement) {
             playerElement.appendChild(overlayDiv);
         } else {
-            console.warn("🍥 Could not find YouTube player element to attach overlay.");
+            debugWarn("🍥 Could not find YouTube player element to attach overlay.");
             (document.getElementById('movie_player') || document.body).appendChild(overlayDiv);
         }
     }
@@ -457,7 +501,7 @@ function setupDanmakuOverlay(dList) {
         commentManager.init('css'); // Specify 'css' renderer for better performance
         commentManager.setBounds(width, height);
 
-        console.log('🍥 CommentManager initialized with dimensions:', width, 'x', height);
+        debugLog('🍥 CommentManager initialized with dimensions:', width, 'x', height);
 
         // Apply density-based filtering
         const filteredComments = applyDensityFilter(dList, videoElement ? videoElement.duration : 0);
@@ -496,11 +540,11 @@ function setupDanmakuOverlay(dList) {
         const lineHeight = tempStyle.offsetHeight;
         document.body.removeChild(tempStyle);
 
-        console.log('🍥 Using lane height of', lineHeight, 'pixels');
+        debugLog('🍥 Using lane height of', lineHeight, 'pixels');
 
         // Calculate available lanes
         const availableLanes = Math.floor(height / lineHeight);
-        console.log('🍥 Available lanes:', availableLanes);
+        debugLog('🍥 Available lanes:', availableLanes);
 
         let lastAllocatedLane = -1; // Add this line to track last allocated lane
         let lastAllocationTime = 0; // Add this line to track last allocation time
@@ -516,12 +560,12 @@ function setupDanmakuOverlay(dList) {
 
         // Add logging function for lane changes
         function logLaneChange(commentId, fromLane, toLane, reason) {
-            console.log(`🍥 Lane Change - Comment ${commentId}: ${fromLane} → ${toLane} (${reason})`);
+            debugLog(`🍥 Lane Change - Comment ${commentId}: ${fromLane} → ${toLane} (${reason})`);
         }
 
         // Add logging function for danmaku initialization
         function logDanmakuInit(comment, lane, position) {
-            console.log(`🍥 Danmaku Init - ID: ${comment._id}, Text: "${comment.text}", Lane: ${lane}, Position: ${Math.round(position)}`);
+            debugLog(`🍥 Danmaku Init - ID: ${comment._id}, Text: "${comment.text}", Lane: ${lane}, Position: ${Math.round(position)}`);
         }
 
         // Track top return cooldown
@@ -550,8 +594,35 @@ function setupDanmakuOverlay(dList) {
             return false;
         }
 
-        // Process pending returns periodically
+        // Update comment progress tracking
+        function updateCommentProgress() {
+            if (!commentManager || !commentManager.runline) {
+                return; // Exit early if commentManager is not available
+            }
+
+            const currentComments = commentManager.runline.filter(c =>
+                c.mode === 1 && c.x > 0 && c.x < width);
+
+            for (const comment of currentComments) {
+                if (comment._id && topLaneTracker.has(comment._id)) {
+                    const data = topLaneTracker.get(comment._id);
+                    const progress = 1 - (comment.x / width);
+                    topLaneTracker.set(comment._id, {
+                        ...data,
+                        x: comment.x,
+                        progress,
+                        lastUpdate: Date.now()
+                    });
+                }
+            }
+        }
+
+        // Process pending returns with safety checks
         function processPendingReturns() {
+            if (!commentManager) {
+                return; // Exit early if commentManager is not available
+            }
+
             const currentTime = Date.now();
 
             // Clean up old tracked comments more aggressively
@@ -647,25 +718,6 @@ function setupDanmakuOverlay(dList) {
 
         // Process returns more frequently
         setInterval(processPendingReturns, 33); // Increased frequency to 30fps
-
-        // Update comment progress tracking
-        function updateCommentProgress() {
-            const currentComments = commentManager.runline.filter(c =>
-                c.mode === 1 && c.x > 0 && c.x < width);
-
-            for (const comment of currentComments) {
-                if (comment._id && topLaneTracker.has(comment._id)) {
-                    const data = topLaneTracker.get(comment._id);
-                    const progress = 1 - (comment.x / width);
-                    topLaneTracker.set(comment._id, {
-                        ...data,
-                        x: comment.x,
-                        progress,
-                        lastUpdate: Date.now()
-                    });
-                }
-            }
-        }
 
         // Update progress tracking more frequently
         setInterval(updateCommentProgress, 33);
@@ -776,7 +828,7 @@ function setupDanmakuOverlay(dList) {
 
         // Debug log
         if (formattedComments.length > 0) {
-            console.log('🍥 Sample comment:', formattedComments[0]);
+            debugLog('🍥 Sample comment:', formattedComments[0]);
         }
 
         // Load comments
@@ -793,91 +845,123 @@ function setupDanmakuOverlay(dList) {
         synchronizeDanmakuWithVideo();
         addResizeObserver();
 
-        console.log('🍥 Loaded', formattedComments.length, 'comments after density filtering');
+        debugLog('🍥 Loaded', formattedComments.length, 'comments after density filtering');
     } catch (error) {
-        console.error('🍥 Error in setupDanmakuOverlay:', error);
+        debugError('🍥 Error in setupDanmakuOverlay:', error);
     }
 }
 
 function synchronizeDanmakuWithVideo() {
     const video = document.querySelector('video');
-    if (!video || !commentManager) {
-        console.warn('🍥 Video element or CommentManager not found for sync.');
+    if (!video) {
+        debugWarn('🍥 Video element not found for sync.');
         return;
     }
 
-    // Clean up existing listeners
+    // Clean up existing listeners first
     if (video._danmakuListeners) {
         Object.entries(video._danmakuListeners).forEach(([event, listener]) => {
             video.removeEventListener(event, listener);
         });
+        video._danmakuListeners = null;
     }
 
-    // Create new listeners
+    // Create new listeners with error handling
     const listeners = {
         play: () => {
-            console.log('🍥 Video play event');
-            commentManager.start();
-            commentManager.time(video.currentTime * 1000); // Use exact time without offset
+            try {
+                if (!commentManager) return;
+                debugLog('🍥 Video play event');
+                commentManager.start();
+                commentManager.time(video.currentTime * 1000);
+            } catch (error) {
+                debugError('🍥 Error in play handler:', error);
+                cleanupDanmakuOverlay();
+            }
         },
         pause: () => {
-            console.log('🍥 Video pause event');
-            commentManager.stop();
+            try {
+                if (!commentManager) return;
+                debugLog('🍥 Video pause event');
+                commentManager.stop();
+            } catch (error) {
+                debugError('🍥 Error in pause handler:', error);
+                cleanupDanmakuOverlay();
+            }
         },
         seeking: () => {
-            console.log('🍥 Video seeking event');
-            commentManager.stop();
-            commentManager.clear(); // Clear all comments when seeking
-            // Store the seek target time for use after seeking
-            video._seekTargetTime = video.currentTime;
+            try {
+                if (!commentManager) return;
+                debugLog('🍥 Video seeking event');
+                commentManager.stop();
+                commentManager.clear();
+                video._seekTargetTime = video.currentTime;
+            } catch (error) {
+                debugError('🍥 Error in seeking handler:', error);
+                cleanupDanmakuOverlay();
+            }
         },
         seeked: () => {
-            console.log('🍥 Video seeked event');
-            // Reset the comment manager's timeline position to the new time
-            commentManager.seek(video.currentTime * 1000);
-            commentManager.time(video.currentTime * 1000); // Use exact time without offset
-
-            // Store current time as an option to be used by space allocator
-            commentManager.options.currentPositionTime = video.currentTime * 1000;
-
-            if (!video.paused) {
-                commentManager.start();
+            try {
+                if (!commentManager) return;
+                debugLog('🍥 Video seeked event');
+                commentManager.seek(video.currentTime * 1000);
+                commentManager.time(video.currentTime * 1000);
+                commentManager.options.currentPositionTime = video.currentTime * 1000;
+                if (!video.paused) {
+                    commentManager.start();
+                }
+            } catch (error) {
+                debugError('🍥 Error in seeked handler:', error);
+                cleanupDanmakuOverlay();
             }
         },
         timeupdate: () => {
-            if (!video.paused) {
-                commentManager.time(video.currentTime * 1000); // Use exact time without offset
-                // Update current position time for comment allocator
+            try {
+                if (!commentManager || video.paused) return;
+                commentManager.time(video.currentTime * 1000);
                 commentManager.options.currentPositionTime = video.currentTime * 1000;
+            } catch (error) {
+                debugError('🍥 Error in timeupdate handler:', error);
+                cleanupDanmakuOverlay();
             }
         },
         ended: () => {
-            console.log('🍥 Video ended event');
-            commentManager.stop();
-            commentManager.clear(); // Clear all comments when video ends
+            try {
+                if (!commentManager) return;
+                debugLog('🍥 Video ended event');
+                commentManager.stop();
+                commentManager.clear();
+            } catch (error) {
+                debugError('🍥 Error in ended handler:', error);
+                cleanupDanmakuOverlay();
+            }
         }
     };
 
-    // Attach listeners
-    Object.entries(listeners).forEach(([event, listener]) => {
-        video.addEventListener(event, listener);
-    });
+    // Attach listeners with error handling
+    try {
+        Object.entries(listeners).forEach(([event, listener]) => {
+            video.addEventListener(event, listener);
+        });
+        video._danmakuListeners = listeners;
 
-    // Store listeners for cleanup
-    video._danmakuListeners = listeners;
+        // Initial state sync
+        const width = video.offsetWidth;
+        const height = video.offsetHeight;
+        if (commentManager) {
+            commentManager.setBounds(width, height);
+            commentManager.options.currentPositionTime = video.currentTime * 1000;
 
-    // Initial state sync
-    const width = video.offsetWidth;
-    const height = video.offsetHeight;
-    commentManager.setBounds(width, height);
-
-    // Store initial position time
-    commentManager.options.currentPositionTime = video.currentTime * 1000;
-
-    // Start if video is playing
-    if (!video.paused) {
-        commentManager.start();
-        commentManager.time(video.currentTime * 1000); // Use exact time without offset
+            // Start if video is playing
+            if (!video.paused) {
+                commentManager.start();
+                commentManager.time(video.currentTime * 1000);
+            }
+        }
+    } catch (error) {
+        console.error('🍥 Error setting up video sync:', error);
+        cleanupDanmakuOverlay();
     }
 }
 
@@ -924,16 +1008,15 @@ function handleClosePopup() {
 async function main() {
     const videoId = getYouTubeVideoId(); // Get ID first
     if (!videoId) {
-        console.log('🍥 Not a YouTube watch page or video ID not found.');
+        debugLog('Not a YouTube watch page or video ID not found.');
         cleanupUI(true); // Cleanup if we navigated away
         return;
     }
 
     // Only run full main logic if video ID changes
     if (videoId === currentVideoId && matchedBiliData) {
-        console.log('🍥 Video ID unchanged, potentially re-rendering UI.');
+        debugLog('Video ID unchanged, potentially re-rendering UI.');
         // Ensure popup is rendered if needed, based on current state
-        // Read state just in case?
         const storageKey = getStorageKey();
         chrome.storage.local.get([storageKey], (result) => {
             currentOverlayState = result[storageKey] || false; // Update state assumption
@@ -946,67 +1029,87 @@ async function main() {
         return;
     }
 
-    console.log('🍥 New video detected or first load, running main function for:', videoId);
+    debugLog('New video detected or first load, running main function for:', videoId);
     currentVideoId = videoId; // Set current video ID
     cleanupUI(false); // Clean up UI elements but keep video ID
 
     const storageKey = getStorageKey();
     chrome.storage.local.get([storageKey], async (result) => {
         currentOverlayState = result[storageKey] || false; // Default to false
-        console.log(`🍥 Initial overlay state for ${storageKey}: ${currentOverlayState}`);
+        debugLog(`Initial overlay state for ${storageKey}: ${currentOverlayState}`);
 
         // Now proceed with fetching data
         const ytData = extractYouTubeVideoData();
         if (!ytData) {
-            console.log('🍥 Could not extract YouTube video data.');
+            debugLog('Could not extract YouTube video data.');
             return;
         }
-        console.log('🍥 YouTube Data:', ytData);
 
-        const biliSearchResults = await searchBili(ytData.title);
-        if (!biliSearchResults || biliSearchResults.length === 0) {
-            console.log('🍥 No Bilibili search results.');
-            return;
-        }
-        console.log('🍥 Bilibili Search Results:', biliSearchResults);
+        // Try to find a match even if duration is suspicious
+        const matchResult = await processVideoMatch(ytData);
 
-        // Temporarily lower thresholds for testing popup display
-        const titleSimilarityThreshold = 0.1; // Lowered from default 0.7
-        const durationToleranceSeconds = 300; // Increased from default 10s (now 5 minutes)
-        console.log(`🍥 Using test thresholds - Title Sim: ${titleSimilarityThreshold}, Duration Tol: ${durationToleranceSeconds}s`);
-
-        const bestMatch = findBestMatch(ytData, biliSearchResults, titleSimilarityThreshold, durationToleranceSeconds);
-        if (!bestMatch) {
-            console.log('🍥 No suitable Bilibili match found.');
-            return;
-        }
-        console.log('🍥 Best Bilibili Match:', bestMatch);
-
-        // Store the initially matched data. CID might be fetched later if needed.
-        matchedBiliData = { ...bestMatch };
-
-        // Attempt to get full details including CID upfront
-        const detailedBiliInfo = await getBilibiliVideoDetails(bestMatch.bvid);
-        if (detailedBiliInfo && detailedBiliInfo.cid) {
-            matchedBiliData = { ...detailedBiliInfo, ...bestMatch }; // Merge, ensuring CID is present
-            console.log('🍥 Fetched detailed Bilibili info with CID:', matchedBiliData);
-        } else {
-            console.warn('🍥 Could not fetch detailed Bili info with CID immediately. Will try on demand.');
-            // matchedBiliData already contains basic info from search.
-        }
-
-        // Log the final data being sent to the popup
-        // console.log('🍥 Final matchedBiliData for popup:', JSON.stringify(matchedBiliData, null, 2));
-
-        renderPopup(true);
-
-        // If initial state is active, fetch and show danmaku immediately
-        if (currentOverlayState) {
-            console.log('🍥 Initial state is active, attempting to show danmaku on load.');
-            // Call the toggle handler logic directly to show danmaku
-            handleShowDanmakuToggle(true, matchedBiliData.cid || matchedBiliData.aid);
+        // Only retry if no match was found AND the duration was suspicious
+        // This means we won't retry if we found a valid match, even with suspicious duration
+        if (!matchResult && ytData.isSuspiciouslyShort) {
+            debugLog('No match found with suspicious duration, waiting for potential ad to finish...');
+            // Clean up any existing overlay before retry
+            cleanupDanmakuOverlay();
+            // Wait for video duration + 1 second buffer, or default to 3 seconds if duration is too short
+            const retryDelay = Math.max(ytData.duration * 1000 + 1000, 3000);
+            setTimeout(async () => {
+                const retryYtData = extractYouTubeVideoData();
+                if (!retryYtData) {
+                    debugLog('Could not extract video data on retry.');
+                    return;
+                }
+                // Try matching again with the new data
+                await processVideoMatch(retryYtData);
+            }, retryDelay);
         }
     });
+}
+
+// Helper function to process video matching and setup
+async function processVideoMatch(ytData) {
+    console.log('🍥 YouTube Data:', ytData);
+
+    const biliSearchResults = await searchBili(ytData.title);
+    if (!biliSearchResults || biliSearchResults.length === 0) {
+        console.log('🍥 No Bilibili search results.');
+        return false;
+    }
+    console.log('🍥 Bilibili Search Results:', biliSearchResults);
+
+    // Temporarily lower thresholds for testing popup display
+    const titleSimilarityThreshold = 0.1; // Lowered from default 0.7
+    const durationToleranceSeconds = 300; // Increased from default 10s (now 5 minutes)
+    console.log(`🍥 Using test thresholds - Title Sim: ${titleSimilarityThreshold}, Duration Tol: ${durationToleranceSeconds}s`);
+
+    const bestMatch = findBestMatch(ytData, biliSearchResults, titleSimilarityThreshold, durationToleranceSeconds);
+    if (!bestMatch) {
+        console.log('🍥 No suitable Bilibili match found.');
+        return false;
+    }
+    console.log('🍥 Best Bilibili Match:', bestMatch);
+
+    // Store the initially matched data. CID might be fetched later if needed.
+    matchedBiliData = { ...bestMatch };
+
+    // Attempt to get full details including CID upfront
+    const detailedBiliInfo = await getBilibiliVideoDetails(bestMatch.bvid);
+    if (detailedBiliInfo) {
+        matchedBiliData = { ...matchedBiliData, ...detailedBiliInfo };
+    }
+
+    // Show the popup with current state
+    renderPopup(true);
+
+    // If the overlay was previously active for this video, reactivate it
+    if (currentOverlayState) {
+        await handleShowDanmakuToggle(true, matchedBiliData.cid || matchedBiliData.aid);
+    }
+
+    return true;
 }
 
 function init() {
