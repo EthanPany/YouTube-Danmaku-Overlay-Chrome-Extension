@@ -219,6 +219,28 @@ function formatDate(timestamp) {
 
 const DanmakuMatchPopup = ({ matchData, onShowDanmaku, onClosePopup, initialOverlayActive }) => {
     const [isActive, setIsActive] = useState(initialOverlayActive);
+    const [isFullscreen, setIsFullscreen] = useState(false);
+
+    useEffect(() => {
+        const handleFullscreenChange = () => {
+            setIsFullscreen(document.fullscreenElement !== null);
+        };
+
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+        document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+        document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+        document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+
+        // Initial check
+        setIsFullscreen(document.fullscreenElement !== null);
+
+        return () => {
+            document.removeEventListener('fullscreenchange', handleFullscreenChange);
+            document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+            document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+            document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+        };
+    }, []);
 
     // Update local state if prop changes (e.g., on video navigation reset)
     useEffect(() => {
@@ -229,7 +251,7 @@ const DanmakuMatchPopup = ({ matchData, onShowDanmaku, onClosePopup, initialOver
         }
     }, [initialOverlayActive]);
 
-    if (!matchData) return null;
+    if (!matchData || isFullscreen) return null;
 
     const handleToggle = (e) => {
         e.stopPropagation(); // Prevent potential interference
