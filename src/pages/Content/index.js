@@ -5,10 +5,6 @@ import { searchBili, getBilibiliVideoDetails, fetchDanmaku } from './modules/bil
 import { findBestMatch } from './modules/match';
 import DanmakuMatchPopup from '../../containers/DanmakuMatchPopup/DanmakuMatchPopup';
 
-// Attempt to import the distributed file directly to execute it
-// This might make CommentManager globally available in the content script scope
-import 'comment-core-library/dist/CommentCoreLibrary.js';
-
 console.log('🍥 YouTube Danmaku Overlay Content Script Loaded 🍥');
 
 const EXTENSION_ROOT_ID = 'youtube-danmaku-overlay-root';
@@ -23,6 +19,186 @@ let isPopupVisible = false;
 let commentManager = null;
 let danmakuList = []; // Store for fetched danmaku
 let currentOverlayState = false; // Keep track of the state we *think* should be active based on storage
+
+// We need to inject the library before using it
+async function ensureLibraryInjected() {
+    // standaloneContentScript.bundle.js is now injected via manifest at document_start
+    // We just need to wait for window.danmakuManager to be available
+    if (!window.danmakuManager) {
+        console.log('🍥 Waiting for danmakuManager to be initialized by standaloneContentScript...');
+        let danmakuManagerLoaded = await new Promise((resolve) => {
+            const checkInterval = setInterval(() => {
+                if (window.danmakuManager) {
+                    clearInterval(checkInterval);
+                    resolve(true);
+                }
+            }, 100);
+
+            // Timeout after 5 seconds (should be faster now)
+            setTimeout(() => {
+                clearInterval(checkInterval);
+                if (!window.danmakuManager) { // Check one last time
+                    console.error('🍥 Timed out waiting for danmakuManager to load. It should have been injected by the manifest.');
+                    resolve(false);
+                } else {
+                    resolve(true);
+                }
+            }, 5000);
+        });
+
+        if (!danmakuManagerLoaded) {
+            return false; // Early exit if it's still not there
+        }
+    }
+
+    // Set the extension URL
+    const extensionUrl = chrome.runtime.getURL('');
+    console.log('🍥 Extension URL:', extensionUrl);
+
+    // Now that we have the danmakuManager, set the extension path
+    if (window.danmakuManager && window.danmakuManager.setExtensionPath) {
+        window.danmakuManager.setExtensionPath(extensionUrl);
+        console.log('🍥 danmakuManager found and extension path set successfully');
+
+        // Initialize the library
+        if (window.danmakuManager.injectLibrary) {
+            try {
+                await window.danmakuManager.injectLibrary(); // This injects CCL and pageScript from extension
+                console.log('🍥 CommentCoreLibrary and pageScript should be injected by danmakuManager successfully');
+            } catch (error) {
+                console.error('🍥 Error calling danmakuManager.injectLibrary():', error);
+                // No explicit fallback to injectCommentCoreFallback here,
+                // as injectLibrary itself handles loading from extension files.
+                // If injectLibrary fails, something is fundamentally wrong with resource access.
+                return false;
+            }
+        } else {
+            console.error('🍥 danmakuManager loaded but injectLibrary method not found');
+            return false;
+        }
+    } else {
+        console.error('🍥 danmakuManager loaded but setExtensionPath method not found, or danmakuManager is missing.');
+        return false;
+    }
+
+    return !!window.danmakuManager;
+}
+
+// Fallback direct injection of CommentCoreLibrary if danmakuManager fails
+// This function is now less likely to be called if ensureLibraryInjected works as expected
+// with manifest injection. It's kept as a deep fallback.
+async function injectCommentCoreFallback() {
+    console.warn('🍥 Attempting deep fallback: injectCommentCoreFallback(). This should ideally not be reached.');
+
+    try {
+        // Insert the CommentCoreLibrary directly from extension
+        const cclUrl = chrome.runtime.getURL('vendor/CommentCoreLibrary.min.js');
+        console.log('🍥 Fallback: Loading CommentCoreLibrary directly from:', cclUrl);
+
+        const ccl = document.createElement('script');
+        ccl.src = cclUrl;
+        let cclLoaded = false;
+        ccl.onload = () => {
+            console.log('🍥 Fallback: CommentCoreLibrary loaded successfully');
+            cclLoaded = true;
+        };
+        ccl.onerror = (err) => {
+            console.error('🍥 Fallback: Failed to load CommentCoreLibrary from extension:', err);
+        };
+        document.head.appendChild(ccl);
+
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait a bit for script to load/error
+
+        if (!cclLoaded && typeof CommentManager === 'undefined') { // Check if CCL loaded and defined CommentManager
+            console.error('🍥 Fallback: CommentCoreLibrary failed to load or define CommentManager.');
+            // Try to create a dummy CommentManager to prevent further errors if CCL is missing
+            if (typeof CommentManager === 'undefined') {
+                console.warn("🍥 Fallback: CCL not loaded, attempting to define a dummy CommentManager for basic messaging.");
+                window.CommentManager = function () {
+                    this.init = function () { };
+                    this.load = function () { };
+                    this.start = function () { };
+                    this.stop = function () { };
+                    this.clear = function () { };
+                    this.time = function () { };
+                    console.warn("🍥 Dummy CommentManager created. Danmaku will not display.");
+                };
+            }
+        }
+
+
+        // Insert the pageScript directly
+        const pageScriptUrl = chrome.runtime.getURL('pageScript.bundle.js');
+        console.log('🍥 Fallback: Loading pageScript from:', pageScriptUrl);
+
+        const pageScript = document.createElement('script');
+        pageScript.src = pageScriptUrl;
+        let pageScriptLoaded = false;
+        pageScript.onload = () => {
+            console.log('🍥 Fallback: pageScript loaded successfully');
+            pageScriptLoaded = true;
+        };
+        pageScript.onerror = (err) => {
+            console.error('🍥 Fallback: Failed to load pageScript:', err);
+        };
+        document.head.appendChild(pageScript);
+
+        await new Promise(resolve => setTimeout(resolve, 500)); // Wait for pageScript to potentially initialize
+
+        if (!pageScriptLoaded) {
+            console.error('🍥 Fallback: pageScript.bundle.js failed to load.');
+        }
+
+        console.log('🍥 Fallback: CommentCoreLibrary and pageScript injection attempt finished.');
+
+        // Re-create a simple danmakuManager for basic message passing if the main one failed
+        // This fallback manager will attempt to directly postMessage to the pageScript
+        if (!window.danmakuManager) {
+            console.warn("🍥 Fallback: window.danmakuManager still not available. Creating a simple postMessage-based fallback manager.");
+            window.danmakuManager = {
+                show: async (danmakuData) => {
+                    try {
+                        const transformedData = danmakuData.map(comment => ({
+                            text: comment.text,
+                            mode: comment.mode === 1 ? 1 : 1,
+                            stime: comment.time * 1000
+                        }));
+                        window.postMessage({
+                            type: 'FROM_CONTENT_SCRIPT', // Use the same type pageScript listens for
+                            action: 'loadDanmaku',
+                            data: { danmakuArray: transformedData }
+                        }, '*');
+                        console.log("🍥 Fallback manager: show() message posted.");
+                        return true;
+                    } catch (e) {
+                        console.error('🍥 Error in fallback manager show():', e);
+                        return false;
+                    }
+                },
+                hide: async () => {
+                    try {
+                        window.postMessage({
+                            type: 'FROM_CONTENT_SCRIPT',
+                            action: 'cleanup',
+                            data: {}
+                        }, '*');
+                        console.log("🍥 Fallback manager: hide() message posted.");
+                        return true;
+                    } catch (e) {
+                        console.error('🍥 Error in fallback manager hide():', e);
+                        return false;
+                    }
+                },
+                // No injectLibrary or setExtensionPath in this very basic fallback
+            };
+            return true; // Fallback manager created
+        }
+        return false; // Fallback manager was not needed or failed to create
+    } catch (error) {
+        console.error('🍥 Deep Fallback injection failed catastrophically:', error);
+        return false;
+    }
+}
 
 function getStorageKey() {
     return currentVideoId ? `${STORAGE_KEY_PREFIX}${currentVideoId}` : null;
@@ -131,16 +307,12 @@ async function handleShowDanmakuToggle(newState, biliId) {
                 matchedBiliData.cid = cid; // Update stored data
             } else {
                 console.error('🍥 Failed to get CID for matched video. Cannot load danmaku.');
-                // Do not revert toggle state here. User explicitly turned it on.
-                // The popup will still reflect the 'on' state.
-                // An error message could be displayed to the user if desired.
                 return;
             }
         }
 
         if (!cid) {
             console.error('🍥 Cannot show danmaku without CID.');
-            // Do not revert toggle state here.
             return;
         }
 
@@ -155,102 +327,95 @@ async function handleShowDanmakuToggle(newState, biliId) {
                 setupDanmakuOverlay(danmakuList);
             } else {
                 console.error('🍥 Failed to fetch danmaku.');
-                // Do not revert toggle state here.
-                // An error message could be displayed to the user.
             }
         }
     } else { // Hide Overlay
         console.log('🍥 Hiding danmaku...');
-        const overlay = document.getElementById(DANMAKU_OVERLAY_ID);
-        if (overlay) {
-            if (commentManager) {
-                commentManager.clear();
-                commentManager.stop();
+
+        // Use the danmakuManager when available
+        await ensureLibraryInjected();
+        if (window.danmakuManager) {
+            window.danmakuManager.hide()
+                .then(() => console.log('🍥 Danmaku overlay hidden successfully.'))
+                .catch(err => console.error('🍥 Error hiding danmaku overlay:', err));
+        } else {
+            // Fallback to direct manipulation if no danmakuManager
+            const overlay = document.getElementById(DANMAKU_OVERLAY_ID);
+            if (overlay) {
+                if (commentManager) {
+                    commentManager.clear();
+                    commentManager.stop();
+                }
+                overlay.remove();
             }
-            overlay.remove();
+
+            // Also try to send a message to page script as a last resort
+            try {
+                window.postMessage({
+                    type: 'FROM_CONTENT_SCRIPT',
+                    action: 'cleanup',
+                    data: {}
+                }, '*');
+            } catch (e) {
+                console.error('🍥 Error sending cleanup message:', e);
+            }
         }
     }
 }
 
 function setupDanmakuOverlay(dList) {
-    let overlayDiv = document.getElementById(DANMAKU_OVERLAY_ID);
-    if (!overlayDiv) {
-        overlayDiv = document.createElement('div');
-        overlayDiv.id = DANMAKU_OVERLAY_ID;
-        overlayDiv.style.position = 'absolute';
-        overlayDiv.style.top = '0';
-        overlayDiv.style.left = '0';
-        overlayDiv.style.width = '100%';
-        overlayDiv.style.height = '100%';
-        overlayDiv.style.zIndex = '2000'; // Below popup but above video controls if possible
-        overlayDiv.style.pointerEvents = 'none'; // Allow clicks through to video player
+    // Use the danmakuManager from contentScript.js to handle danmaku
+    ensureLibraryInjected().then(success => {
+        if (success && window.danmakuManager && window.danmakuManager.show) { // Check for .show
+            // Transform data to match expected format
+            const transformedData = dList.map(c => ({
+                text: c.text,
+                mode: c.mode === 1 ? 1 : 1, // Ensure mode 1 for scrolling
+                time: c.time, // contentScript will convert to milliseconds
+                // color: c.color, // Can add if parsed and desired
+                // size: c.size,   // Can add if parsed and desired
+            }));
 
-        const playerElement = document.querySelector('.html5-video-player'); // YouTube's player container
-        if (playerElement) {
-            playerElement.appendChild(overlayDiv);
+            window.danmakuManager.show(transformedData)
+                .then(() => console.log('🍥 Danmaku overlay setup completed successfully via danmakuManager.'))
+                .catch(err => {
+                    console.error('🍥 Error setting up danmaku overlay via danmakuManager:', err);
+                    // Attempt direct postMessage as a last resort if danmakuManager.show failed
+                    tryToPostMessageDanmaku(dList);
+                });
         } else {
-            console.warn("🍥 Could not find YouTube player element to attach overlay.");
-            // Fallback to body or #movie_player, though this might not be ideal for sizing
-            (document.getElementById('movie_player') || document.body).appendChild(overlayDiv);
+            console.error('🍥 danmakuManager not available or lacks show method after ensureLibraryInjected. Attempting direct postMessage.');
+            tryToPostMessageDanmaku(dList);
         }
-    }
-
-    // Remove the previous require logic
-    // let CCL;
-    // try {
-    //     CCL = require('comment-core-library');
-    //     console.log('🍥 Successfully required "comment-core-library":', CCL);
-    // } catch (err) {
-    //     console.error('🍥 Failed to require "comment-core-library":', err);
-    //     return; // Cannot proceed
-    // }
-
-    if (!commentManager) {
-        // Check if CommentManager is now globally available (likely on window or self)
-        let GlobalCommentManager = window.CommentManager || self.CommentManager;
-
-        if (typeof GlobalCommentManager === 'function') {
-            console.log('🍥 Using Global CommentManager found on window/self.');
-            commentManager = new GlobalCommentManager(overlayDiv);
-            commentManager.init();
-        } else {
-            // Final fallback: Check if it exists directly in the scope without window/self prefix
-            // This is less likely but possible depending on how the script executes.
-            try {
-                if (typeof CommentManager === 'function') {
-                    console.log('🍥 Using CommentManager found directly in scope (fallback).');
-                    commentManager = new CommentManager(overlayDiv);
-                    commentManager.init();
-                } else {
-                    console.error('🍥 Critical: CommentManager constructor not found globally or directly in scope after importing dist file. GlobalCommentManager:', GlobalCommentManager);
-                    return; // Stop execution
-                }
-            } catch (e) {
-                console.error('🍥 Critical: Error accessing CommentManager directly. It might not be defined. Error:', e);
-                return; // Stop execution
-            }
-        }
-
-        // Optional: Configure CommentManager (e.g., speed, opacity, font)
-        // commentManager.options.scroll.duration = 8000; // 8 seconds to cross screen
-        // commentManager.options.global.opacity = 0.8;
-    }
-
-    commentManager.clear(); // Clear any previous danmaku
-    commentManager.load(dList.map(c => ({
-        text: c.text,
-        mode: c.mode === 1 ? 1 : 1, // Ensure mode 1 for scrolling. CCL modes: 1 (scroll), 4 (bottom), 5 (top)
-        stime: c.time * 1000, // CCL expects milliseconds
-        // color: c.color, // Can add if parsed and desired
-        // size: c.size,   // Can add if parsed and desired
-    })));
-
-    // Start playback sync (Step 10)
-    synchronizeDanmakuWithVideo();
-    commentManager.start();
-    console.log('🍥 Danmaku overlay setup and CM started.');
+    }).catch(err => {
+        console.error('🍥 Error in ensureLibraryInjected during setupDanmakuOverlay:', err);
+        tryToPostMessageDanmaku(dList);
+    });
 }
 
+// Helper function for the ultimate fallback: direct postMessage
+function tryToPostMessageDanmaku(dList) {
+    console.warn('🍥 Using ultimate fallback: tryToPostMessageDanmaku.');
+    // This assumes pageScript.bundle.js might have loaded and set up its listener,
+    // even if CommentCoreLibrary or the main danmakuManager failed.
+    try {
+        window.postMessage({
+            type: 'FROM_CONTENT_SCRIPT', // pageScript should listen for this type
+            action: 'loadDanmaku',
+            data: {
+                danmakuArray: dList.map(c => ({
+                    text: c.text,
+                    mode: c.mode === 1 ? 1 : 1,
+                    stime: c.time * 1000,
+                }))
+            }
+        }, '*');
+        console.log('🍥 Ultimate fallback: Danmaku overlay message posted directly to page script.');
+    } catch (e) {
+        console.error('🍥 Ultimate fallback (postMessage) failed:', e);
+        // At this point, all methods to show danmaku have failed.
+    }
+}
 
 function synchronizeDanmakuWithVideo() {
     const video = document.querySelector('video');
@@ -331,12 +496,18 @@ async function main() {
         // Ensure popup is rendered if needed, based on current state
         // Read state just in case?
         const storageKey = getStorageKey();
-        chrome.storage.local.get([storageKey], (result) => {
+        chrome.storage.local.get([storageKey], async (result) => { // Made async
             currentOverlayState = result[storageKey] || false; // Update state assumption
             renderPopup(true); // Re-render popup with current state
             if (currentOverlayState && danmakuList.length > 0) {
                 // If state is active and we have danmaku, ensure overlay is shown
-                setupDanmakuOverlay(danmakuList);
+                // Also ensure library is ready before trying to show
+                const libReady = await ensureLibraryInjected();
+                if (libReady) {
+                    setupDanmakuOverlay(danmakuList);
+                } else {
+                    console.error("🍥 Library not ready, cannot re-show danmaku on ID unchanged.");
+                }
             }
         });
         return;
@@ -400,6 +571,7 @@ async function main() {
         if (currentOverlayState) {
             console.log('🍥 Initial state is active, attempting to show danmaku on load.');
             // Call the toggle handler logic directly to show danmaku
+            // ensureLibraryInjected will be called within handleShowDanmakuToggle -> setupDanmakuOverlay
             handleShowDanmakuToggle(true, matchedBiliData.cid || matchedBiliData.aid);
         }
     });

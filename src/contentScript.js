@@ -1,17 +1,16 @@
-// Content script runs in an isolated environment, but can modify the page DOM
-// We'll inject the CommentCoreLibrary into the page context
-
+// Standalone version of contentScript.js that will be directly accessible to the page
 // Keep track of whether we've already injected scripts to avoid duplicating
 let libraryInjected = false;
 let lastRequestId = 0;
 const pendingRequests = new Map();
+let extensionPath = ''; // Will be set from outside
 
 // Function to inject a script into the page
 function injectScript(src, onload = null) {
     return new Promise((resolve, reject) => {
         const script = document.createElement('script');
 
-        if (src.startsWith('http') || src.startsWith('/')) {
+        if (src.startsWith('http') || src.startsWith('/') || src.startsWith('chrome-extension://')) {
             // External file or absolute path
             script.src = src;
             script.onload = () => {
@@ -31,7 +30,7 @@ function injectScript(src, onload = null) {
         }
 
         (document.head || document.documentElement).appendChild(script);
-        if (!src.startsWith('http') && !src.startsWith('/')) {
+        if (!src.startsWith('http') && !src.startsWith('/') && !src.startsWith('chrome-extension://')) {
             // Remove inline scripts after they're injected to avoid cluttering the DOM
             // But leave external scripts which need to stay to continue loading
             script.parentNode.removeChild(script);
@@ -144,14 +143,21 @@ async function injectCommentCoreLibrary() {
     `;
         injectCSS(cclCSS);
 
-        // Then inject the main library
-        // Note: We're using a CDN URL for demonstration, but you should consider bundling the file with your extension
-        await injectScript('https://cdn.jsdelivr.net/npm/comment-core-library@0.11.1/dist/CommentCoreLibrary.min.js');
+        // Then inject the main library (use the bundled version instead of CDN)
+        if (!extensionPath) {
+            console.error('🍥 Extension path not set, cannot load CommentCoreLibrary');
+            throw new Error('Extension path not set');
+        }
+
+        // Load from extension's vendor directory
+        const cclUrl = extensionPath + 'vendor/CommentCoreLibrary.min.js';
+        console.log('🍥 Loading CommentCoreLibrary from:', cclUrl);
+        await injectScript(cclUrl);
 
         // Finally, inject our page script
-        const response = await fetch(chrome.runtime.getURL('pageScript.js'));
-        const pageScriptText = await response.text();
-        await injectScript(pageScriptText);
+        const pageScriptUrl = extensionPath + 'pageScript.bundle.js';
+        console.log('🍥 Loading page script from:', pageScriptUrl);
+        await injectScript(pageScriptUrl);
 
         libraryInjected = true;
         console.log('🍥 CommentCoreLibrary successfully injected into page');
@@ -238,10 +244,18 @@ async function hideDanmaku() {
     }
 }
 
-// Export functions to be used by the rest of your content script
+// Add a method to set the extension path from outside
+function setExtensionPath(path) {
+    extensionPath = path;
+    console.log('🍥 Extension path set to:', extensionPath);
+}
+
+// Export functions to be used by the rest of the content script
 window.danmakuManager = {
     show: showDanmaku,
-    hide: hideDanmaku
+    hide: hideDanmaku,
+    injectLibrary: injectCommentCoreLibrary,
+    setExtensionPath: setExtensionPath
 };
 
-console.log('🍥 Content script danmaku manager initialized'); 
+console.log('🍥 Standalone content script danmaku manager initialized'); 

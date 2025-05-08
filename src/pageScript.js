@@ -210,29 +210,42 @@ window.addEventListener('message', function (event) {
     // Only accept messages from the same window
     if (event.source !== window) return;
 
-    // Only process our custom messages
-    if (!event.data || event.data.type !== 'YOUTUBE_DANMAKU_COMMAND') return;
+    // Process both formatted command messages and direct content script messages
+    if (event.data && event.data.type === 'YOUTUBE_DANMAKU_COMMAND') {
+        const { command, data, requestId } = event.data;
+        processCommand(command, data, requestId);
+    }
+    // Handle messages from the updated content script
+    else if (event.data && event.data.type === 'FROM_CONTENT_SCRIPT') {
+        const { action, data } = event.data;
+        processCommand(action, data);
+    }
 
-    const { command, data, requestId } = event.data;
+    // Helper function to process commands and send responses if needed
+    function processCommand(command, data, requestId) {
+        try {
+            const result = window.YouTubeDanmakuOverlay.processCommand(command, data);
 
-    try {
-        const result = window.YouTubeDanmakuOverlay.processCommand(command, data);
-
-        // Send response back to content script
-        window.postMessage({
-            type: 'YOUTUBE_DANMAKU_RESPONSE',
-            requestId: requestId,
-            success: true,
-            result: result
-        }, '*');
-    } catch (error) {
-        console.error('Error processing command:', command, error);
-        window.postMessage({
-            type: 'YOUTUBE_DANMAKU_RESPONSE',
-            requestId: requestId,
-            success: false,
-            error: error.message
-        }, '*');
+            // Only send response if we have a requestId (for the older message format)
+            if (requestId) {
+                window.postMessage({
+                    type: 'YOUTUBE_DANMAKU_RESPONSE',
+                    requestId: requestId,
+                    success: true,
+                    result: result
+                }, '*');
+            }
+        } catch (error) {
+            console.error('Error processing command:', command, error);
+            if (requestId) {
+                window.postMessage({
+                    type: 'YOUTUBE_DANMAKU_RESPONSE',
+                    requestId: requestId,
+                    success: false,
+                    error: error.message
+                }, '*');
+            }
+        }
     }
 });
 

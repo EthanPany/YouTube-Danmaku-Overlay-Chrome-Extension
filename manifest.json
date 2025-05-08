@@ -2,7 +2,10 @@
     "web_accessible_resources": [
         {
             "resources": [
-                "pageScript.js"
+                "pageScript.js",
+                "contentScript.js",
+                "pageScript.bundle.js",
+                "standaloneContentScript.bundle.js"
             ],
             "matches": [
                 "*://*.youtube.com/*"

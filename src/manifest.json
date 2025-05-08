@@ -8,6 +8,15 @@
   "content_scripts": [
     {
       "matches": [
+        "*://*.youtube.com/*"
+      ],
+      "js": [
+        "standaloneContentScript.bundle.js"
+      ],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
         "https://www.youtube.com/watch*"
       ],
       "js": [
@@ -26,5 +35,18 @@
   ],
   "icons": {
     "128": "icon-128.png"
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "standaloneContentScript.bundle.js",
+        "vendor/CommentCoreLibrary.min.js",
+        "pageScript.bundle.js",
+        "contentScript.bundle.js"
+      ],
+      "matches": [
+        "*://*.youtube.com/*"
+      ]
+    }
+  ]
 }

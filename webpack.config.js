@@ -43,11 +43,13 @@ var options = {
     popup: path.join(__dirname, 'src', 'pages', 'Popup', 'index.jsx'),
     background: path.join(__dirname, 'src', 'pages', 'Background', 'index.js'),
     contentScript: path.join(__dirname, 'src', 'pages', 'Content', 'index.js'),
+    pageScript: path.join(__dirname, 'src', 'pageScript.js'),
+    standaloneContentScript: path.join(__dirname, 'src', 'contentScript.js'),
     devtools: path.join(__dirname, 'src', 'pages', 'Devtools', 'index.js'),
     panel: path.join(__dirname, 'src', 'pages', 'Panel', 'index.jsx'),
   },
   chromeExtensionBoilerplate: {
-    notHotReload: ['background', 'contentScript', 'devtools'],
+    notHotReload: ['background', 'contentScript', 'devtools', 'pageScript', 'standaloneContentScript'],
   },
   output: {
     filename: '[name].bundle.js',
@@ -180,6 +182,20 @@ var options = {
         {
           from: 'src/assets/img/icon-34.png',
           to: path.join(__dirname, 'build'),
+          force: true,
+        },
+      ],
+    }),
+    new CopyWebpackPlugin({
+      patterns: [
+        {
+          from: 'node_modules/comment-core-library/dist/CommentCoreLibrary.min.js',
+          to: path.join(__dirname, 'build', 'vendor'),
+          force: true,
+        },
+        {
+          from: 'node_modules/comment-core-library/dist/style.min.css',
+          to: path.join(__dirname, 'build', 'vendor'),
           force: true,
         },
       ],
