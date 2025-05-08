@@ -181,6 +181,8 @@ function setupDanmakuOverlay(dList) {
         overlayDiv.style.height = '100%';
         overlayDiv.style.zIndex = '2000';
         overlayDiv.style.pointerEvents = 'none';
+        overlayDiv.style.overflow = 'hidden';
+        overlayDiv.style.display = 'block';
 
         const playerElement = document.querySelector('.html5-video-player');
         if (playerElement) {
@@ -191,45 +193,65 @@ function setupDanmakuOverlay(dList) {
         }
     }
 
-    if (!commentManager) {
-        try {
-            // Create and initialize CommentManager directly
-            commentManager = new CommentManager(overlayDiv);
-            commentManager.init();
-            console.log('🍥 CommentManager initialized successfully');
-        } catch (error) {
-            console.error('🍥 Failed to initialize CommentManager:', error);
-            return;
-        }
+    // Clean up existing manager if any
+    if (commentManager) {
+        commentManager.clear();
+        commentManager.stop();
+        commentManager = null;
     }
 
-    // Load and display danmaku
     try {
-        commentManager.clear();
-        commentManager.load(dList.map(c => ({
-            text: c.text,
-            mode: c.mode,
-            stime: c.stime,
-            dur: c.dur,
-            color: c.color || 0xffffff,
-            size: c.size || 25,
-            font: c.font || '',
-            shadow: c.shadow !== undefined ? c.shadow : true,
-            border: c.border || false,
-            x: c.x,
-            y: c.y,
-            rZ: c.rZ,
-            rY: c.rY,
-            motion: c.motion,
-            opacity: c.opacity,
-            alpha: c.alpha,
-            position: c.position
-        })));
-        commentManager.start();
+        // Create new manager
+        commentManager = new CommentManager(overlayDiv);
+
+        // Get video dimensions
+        const videoElement = document.querySelector('video');
+        const width = videoElement ? videoElement.offsetWidth : 800;
+        const height = videoElement ? videoElement.offsetHeight : 450;
+
+        // Initialize with dimensions
+        commentManager.init();
+        commentManager.setBounds(width, height);
+
+        console.log('🍥 CommentManager initialized with dimensions:', width, 'x', height);
+
+        // Format and load comments
+        const formattedComments = dList.map(c => {
+            // Ensure comment is within bounds
+            const baseSize = Math.min(height / 15, 25); // Scale with video height
+            return {
+                text: c.text,
+                mode: 1, // Force mode 1 (scrolling) for now
+                stime: (typeof c.time === 'number' ? c.time : c.stime) * 1000, // Convert to milliseconds
+                dur: 4000 + Math.floor(Math.random() * 1000), // Slightly randomize duration
+                color: c.color || 0xffffff,
+                size: c.size || baseSize,
+                border: false,
+                shadow: true,
+                opacity: 1
+            };
+        });
+
+        // Debug log
+        if (formattedComments.length > 0) {
+            console.log('🍥 Sample comment:', formattedComments[0]);
+        }
+
+        // Load comments
+        commentManager.load(formattedComments);
+
+        // Start if video is playing
+        const video = document.querySelector('video');
+        if (video && !video.paused) {
+            commentManager.start();
+        }
+
         synchronizeDanmakuWithVideo();
-        console.log('🍥 Danmaku loaded and started');
+        addResizeObserver();
+
+        console.log('🍥 Loaded', formattedComments.length, 'comments');
     } catch (error) {
-        console.error('🍥 Error loading danmaku:', error);
+        console.error('🍥 Error in setupDanmakuOverlay:', error);
     }
 }
 
@@ -240,48 +262,86 @@ function synchronizeDanmakuWithVideo() {
         return;
     }
 
-    // Ensure existing listeners are removed before adding new ones to prevent duplicates
-    // This requires storing the listener functions if they are anonymous.
-    // For simplicity in this example, we're not meticulously managing listener removal on re-sync,
-    // which could lead to multiple listeners if this function is called repeatedly without cleanup.
-    // Proper handler management is crucial for a robust solution.
+    // Clean up existing listeners
+    if (video._danmakuListeners) {
+        Object.entries(video._danmakuListeners).forEach(([event, listener]) => {
+            video.removeEventListener(event, listener);
+        });
+    }
 
-    const onPlay = () => commentManager.start();
-    const onPause = () => commentManager.stop();
-    const onSeeked = () => commentManager.time(video.currentTime * 1000);
-    const onTimeUpdate = () => {
-        if (video.currentTime && commentManager) { // Check if CM exists
-            commentManager.time(video.currentTime * 1000);
+    // Create new listeners
+    const listeners = {
+        play: () => {
+            console.log('🍥 Video play event');
+            commentManager.start();
+            commentManager.time((video.currentTime - 1) * 1000); // Add back the -1 offset
+        },
+        pause: () => {
+            console.log('🍥 Video pause event');
+            commentManager.stop();
+        },
+        seeking: () => {
+            console.log('🍥 Video seeking event');
+            commentManager.stop();
+        },
+        seeked: () => {
+            console.log('🍥 Video seeked event');
+            commentManager.time((video.currentTime - 1) * 1000); // Add back the -1 offset
+            if (!video.paused) {
+                commentManager.start();
+            }
+        },
+        timeupdate: () => {
+            if (!video.paused) {
+                commentManager.time((video.currentTime - 1) * 1000); // Add back the -1 offset
+            }
         }
     };
-    const onSeeking = () => commentManager.stop();
 
+    // Attach listeners
+    Object.entries(listeners).forEach(([event, listener]) => {
+        video.addEventListener(event, listener);
+    });
 
-    // A more robust way to handle listeners:
-    if (video._danmakuListeners) {
-        video.removeEventListener('play', video._danmakuListeners.onPlay);
-        video.removeEventListener('pause', video._danmakuListeners.onPause);
-        video.removeEventListener('seeking', video._danmakuListeners.onSeeking);
-        video.removeEventListener('seeked', video._danmakuListeners.onSeeked);
-        video.removeEventListener('timeupdate', video._danmakuListeners.onTimeUpdate);
-    }
+    // Store listeners for cleanup
+    video._danmakuListeners = listeners;
 
-    video._danmakuListeners = { onPlay, onPause, onSeeking, onSeeked, onTimeUpdate };
+    // Initial state sync
+    const width = video.offsetWidth;
+    const height = video.offsetHeight;
+    commentManager.setBounds(width, height);
 
-    video.addEventListener('play', onPlay);
-    video.addEventListener('pause', onPause);
-    video.addEventListener('seeking', onSeeking); // Pause when seeking starts
-    video.addEventListener('seeked', onSeeked);   // Adjust time when seeking ends
-    video.addEventListener('timeupdate', onTimeUpdate);
-
-    // Initial sync if video is already playing
+    // Start if video is playing
     if (!video.paused) {
         commentManager.start();
-        commentManager.time(video.currentTime * 1000);
+        commentManager.time((video.currentTime - 1) * 1000); // Add back the -1 offset
     }
-    console.log('🍥 Danmaku playback synchronized with video events.');
 }
 
+function addResizeObserver() {
+    const video = document.querySelector('video');
+    if (!video) return;
+
+    // Clean up existing observer
+    if (video._resizeObserver) {
+        video._resizeObserver.disconnect();
+    }
+
+    // Create new observer
+    const resizeObserver = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+            if (commentManager) {
+                const width = entry.contentRect.width;
+                const height = entry.contentRect.height;
+                console.log('🍥 Video resized to:', width, 'x', height);
+                commentManager.setBounds(width, height);
+            }
+        }
+    });
+
+    resizeObserver.observe(video);
+    video._resizeObserver = resizeObserver;
+}
 
 function handleClosePopup() {
     // Hide overlay if popup is explicitly closed?

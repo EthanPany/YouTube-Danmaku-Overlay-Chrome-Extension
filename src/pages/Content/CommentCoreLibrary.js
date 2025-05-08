@@ -260,6 +260,7 @@ export const CommentManager = (function () {
     };
 
     CommentManagerInternal.prototype.time = function (time) {
+        time = time - 1; // Restored time offset
         if (this.position >= this.timeline.length ||
             Math.abs(this._lastPosition - time) >= this.options.seekTrigger) {
 
@@ -1013,13 +1014,12 @@ export const CommentSpaceAllocator = (function () {
         this._pools = [
             []
         ];
-        this.avoid = 3; // Increased from 1 to 3 for better vertical spacing
+        this.avoid = 1; // Restored original spacing
         this._width = width;
         this._height = height;
     }
     CommentSpaceAllocator.prototype.willCollide = function (existing, check) {
-        // Revised collision logic: checks if lifespans overlap
-        return Math.max(existing.stime, check.stime) < Math.min(existing.stime + existing.ttl, check.stime + check.ttl);
+        return existing.stime + existing.ttl >= check.stime + check.ttl / 2; // Restored original collision logic
     };
     CommentSpaceAllocator.prototype.pathCheck = function (y, comment, pool) {
         var bottom = y + comment.height;
