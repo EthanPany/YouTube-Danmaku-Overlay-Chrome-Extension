@@ -97,6 +97,153 @@ function renderPopup(show = true) {
     );
 }
 
+/**
+ * Filter danmaku based on density analysis of the entire timeline
+ * @param {Array} danmakuList - The original list of danmaku comments
+ * @param {number} videoDuration - Total video duration in seconds
+ * @param {number} targetMaxDensity - Maximum number of comments per window (default: based on screen)
+ * @param {number} windowSizeSeconds - Size of time window to calculate density (default: 5)
+ * @returns {Array} Filtered danmaku list
+ */
+function applyDensityFilter(danmakuList, videoDuration, targetMaxDensity = null, windowSizeSeconds = 5) {
+    if (!danmakuList || danmakuList.length === 0) {
+        return danmakuList;
+    }
+
+    console.log('🍥 Starting density filter analysis for', danmakuList.length, 'comments');
+
+    // Set target density based on screen dimensions if not specified
+    if (!targetMaxDensity) {
+        const video = document.querySelector('video');
+        const height = video ? video.offsetHeight : 450;
+        // Estimate how many comments can fit vertically with some spacing
+        const lineHeight = Math.min(height / 20, 25) * 1.5; // Comment height + spacing
+        const availableLines = Math.floor(height / lineHeight);
+        // Target density is number of comments that can fit on screen in the window
+        // Much more conservative multiplier (0.8 instead of 2) to avoid overcrowding
+        targetMaxDensity = Math.max(5, Math.floor(availableLines * 0.8));
+
+        // Limit maximum density based on screen size
+        const maxAllowedDensity = 35; // Cap for very large screens
+        targetMaxDensity = Math.min(targetMaxDensity, maxAllowedDensity);
+
+        console.log('🍥 Calculated target density:', targetMaxDensity, 'from', availableLines, 'available lines');
+    }
+
+    // Calculate window size in milliseconds
+    const windowSize = windowSizeSeconds * 1000;
+
+    // Convert video duration to milliseconds
+    const durationMs = videoDuration * 1000;
+
+    // Create array of time windows to analyze
+    const timeWindows = [];
+    for (let startTime = 0; startTime < durationMs; startTime += windowSize / 2) { // Overlapping windows
+        const endTime = Math.min(startTime + windowSize, durationMs);
+        timeWindows.push({ start: startTime, end: endTime, count: 0 });
+    }
+
+    // Count comments in each window
+    const commentsWithTime = danmakuList.map(c => ({
+        ...c,
+        timeMs: (typeof c.time === 'number' ? c.time : c.stime) * 1000
+    }));
+
+    commentsWithTime.forEach(comment => {
+        timeWindows.forEach(window => {
+            if (comment.timeMs >= window.start && comment.timeMs < window.end) {
+                window.count++;
+            }
+        });
+    });
+
+    // Find the maximum density
+    const maxDensityWindow = timeWindows.reduce((max, window) =>
+        window.count > max.count ? window : max, { count: 0 });
+
+    // Calculate scaling factor - apply more aggressive scaling
+    let scalingFactor = maxDensityWindow.count > targetMaxDensity
+        ? targetMaxDensity / maxDensityWindow.count
+        : 1.0;
+
+    // Apply additional reduction to make it even less dense (reduce by another 30%)
+    scalingFactor = Math.min(scalingFactor * 0.7, 0.75);
+
+    console.log('🍥 Density analysis:', {
+        maxDensity: maxDensityWindow.count,
+        targetDensity: targetMaxDensity,
+        scalingFactor: scalingFactor,
+        maxDensityTimeWindow: `${maxDensityWindow.start / 1000}s-${maxDensityWindow.end / 1000}s`
+    });
+
+    // More strict threshold for no filtering - only if very sparse
+    if (scalingFactor >= 0.75 && maxDensityWindow.count < 10) {
+        console.log('🍥 Density is acceptable, no filtering needed');
+        return danmakuList;
+    }
+
+    // Apply filter based on calculated factor
+    const filteredList = [];
+
+    // Track how many comments we keep for each second of video for more even distribution
+    const secondCounts = {};
+    const maxPerSecond = Math.ceil(targetMaxDensity / windowSizeSeconds);
+
+    // Analyze each time window separately with different sampling rates
+    timeWindows.forEach(window => {
+        // Get comments in this window
+        const commentsInWindow = commentsWithTime.filter(c =>
+            c.timeMs >= window.start && c.timeMs < window.end);
+
+        // Calculate local scaling factor for this window
+        const localDensity = commentsInWindow.length;
+        let localScalingFactor = localDensity > targetMaxDensity
+            ? targetMaxDensity / localDensity
+            : 1.0;
+
+        // Apply the global reduction as well
+        localScalingFactor = Math.min(localScalingFactor, scalingFactor);
+
+        // Sort comments by importance (prioritize longer comments, special colors)
+        const scoredComments = commentsInWindow.map(comment => {
+            // Simple scoring - can be adjusted based on preferences
+            const textLength = (comment.text || '').length;
+            const isSpecialColor = (comment.color || 0xffffff) !== 0xffffff; // Not white
+            const score = textLength + (isSpecialColor ? 10 : 0);
+            return { ...comment, score };
+        });
+
+        // Sort by score (higher first) and then by time for stable sorting
+        scoredComments.sort((a, b) => {
+            if (b.score !== a.score) return b.score - a.score;
+            return a.timeMs - b.timeMs;
+        });
+
+        // Take top percentage based on scaling factor
+        const numToKeep = Math.max(1, Math.floor(scoredComments.length * localScalingFactor));
+        const selectedComments = scoredComments.slice(0, numToKeep);
+
+        // Apply per-second limit for more even distribution
+        selectedComments.forEach(comment => {
+            const secondKey = Math.floor(comment.timeMs / 1000);
+            secondCounts[secondKey] = (secondCounts[secondKey] || 0) + 1;
+
+            // Only add if we haven't exceeded per-second limit
+            if (secondCounts[secondKey] <= maxPerSecond) {
+                filteredList.push(comment);
+            }
+        });
+    });
+
+    // Remove duplicates that might have been added from overlapping windows
+    const uniqueFiltered = Array.from(new Set(filteredList.map(c => JSON.stringify(c))))
+        .map(s => JSON.parse(s));
+
+    console.log('🍥 Filtered danmaku list from', danmakuList.length, 'to', uniqueFiltered.length, 'comments');
+
+    return uniqueFiltered;
+}
+
 async function handleShowDanmakuToggle(newState, biliId) {
     if (!currentVideoId || !matchedBiliData) return;
 
@@ -239,6 +386,18 @@ function setupDanmakuOverlay(dList) {
         `;
         document.head.appendChild(styleElement);
 
+        // Custom CSS to identify comment paths and avoid collisions
+        const customAllocatorStyle = document.createElement('style');
+        customAllocatorStyle.textContent = `
+            #${DANMAKU_OVERLAY_ID} .cmt.lane-even {
+                border-top: 1px solid rgba(0,255,0,0.1);
+            }
+            #${DANMAKU_OVERLAY_ID} .cmt.lane-odd {
+                border-top: 1px solid rgba(255,0,0,0.1);
+            }
+        `;
+        document.head.appendChild(customAllocatorStyle);
+
         // Set global options
         commentManager.options.global.opacity = 0.9; // Slightly transparent
         commentManager.options.scroll.scale = 1.2; // Adjust speed (1.0 = normal, higher = faster)
@@ -252,8 +411,11 @@ function setupDanmakuOverlay(dList) {
 
         console.log('🍥 CommentManager initialized with dimensions:', width, 'x', height);
 
+        // Apply density-based filtering
+        const filteredComments = applyDensityFilter(dList, videoElement ? videoElement.duration : 0);
+
         // Format and load comments with improved timing
-        const formattedComments = dList.map(c => {
+        const formattedComments = filteredComments.map(c => {
             // Ensure comment is within bounds
             const baseSize = Math.min(height / 20, 25); // Slightly smaller for density
             return {
@@ -271,11 +433,11 @@ function setupDanmakuOverlay(dList) {
         // Sort by time to ensure proper sequencing
         formattedComments.sort((a, b) => a.stime - b.stime);
 
-        // Add discrete lane allocation algorithm
-        // This helps with distributing comments in fixed vertical lanes
-        commentManager.options.density = 1; // Control display density (1 is normal, <1 is sparser)
+        // Add more sophisticated lane allocation algorithm
+        // This helps with distributing comments randomly across vertical space
+        commentManager.options.density = 1.2; // Slightly higher to allow more density in good spots
 
-        // Update CommentSpaceAllocator to use fixed lane heights
+        // Calculate lane height
         const tempStyle = document.createElement('div');
         tempStyle.className = 'cmt';
         tempStyle.style.position = 'absolute';
@@ -286,19 +448,71 @@ function setupDanmakuOverlay(dList) {
         const lineHeight = tempStyle.offsetHeight;
         document.body.removeChild(tempStyle);
 
-        console.log('🍥 Using discrete lane height of', lineHeight, 'pixels');
+        console.log('🍥 Using lane height of', lineHeight, 'pixels');
 
-        // Custom CSS to identify comment paths and avoid collisions
-        const customAllocatorStyle = document.createElement('style');
-        customAllocatorStyle.textContent = `
-            #${DANMAKU_OVERLAY_ID} .cmt.lane-even {
-                border-top: 1px solid rgba(0,255,0,0.1);
+        // Calculate available lanes
+        const availableLanes = Math.floor(height / lineHeight);
+        console.log('🍥 Available lanes:', availableLanes);
+
+        // Implement custom lane allocation to make danmaku appear more random
+        // Store active lanes to prioritize reuse
+        const activeLanes = new Array(availableLanes).fill(0);
+
+        // Override the default comment manager's allocate function
+        const originalAllocate = commentManager.allocate;
+        commentManager.allocate = function (cmt) {
+            // Only override for scrolling comments
+            if (cmt.mode !== 1) {
+                return originalAllocate.call(this, cmt);
             }
-            #${DANMAKU_OVERLAY_ID} .cmt.lane-odd {
-                border-top: 1px solid rgba(255,0,0,0.1);
+
+            // Check if this is a new comment being added
+            if (cmt._allocated !== true) {
+                const result = originalAllocate.call(this, cmt);
+
+                // Record the assigned lane
+                if (typeof cmt.y === 'number') {
+                    const assignedLane = Math.floor(cmt.y / lineHeight);
+                    if (assignedLane >= 0 && assignedLane < availableLanes) {
+                        activeLanes[assignedLane] += 1;
+                    }
+
+                    // Get list of lanes that already have comments
+                    const busyLanes = [];
+                    const emptyLanes = [];
+                    for (let i = 0; i < availableLanes; i++) {
+                        if (activeLanes[i] > 0) {
+                            busyLanes.push(i);
+                        } else {
+                            emptyLanes.push(i);
+                        }
+                    }
+
+                    // 70% chance to use a busy lane if available (to prevent line-by-line pattern)
+                    if (busyLanes.length > 0 && Math.random() < 0.7) {
+                        // Select a random busy lane
+                        const randomLane = busyLanes[Math.floor(Math.random() * busyLanes.length)];
+
+                        // Assign new vertical position with some random variation
+                        cmt.y = (randomLane * lineHeight) + (Math.random() * lineHeight * 0.4);
+
+                        // Update active lane counter
+                        activeLanes[randomLane] += 1;
+                    }
+                    // Otherwise, just add some randomness to the assigned lane
+                    else {
+                        // Add small random variation to y position
+                        cmt.y += (Math.random() - 0.5) * lineHeight * 0.3;
+                    }
+                }
+
+                // Mark as allocated
+                cmt._allocated = true;
+                return result;
             }
-        `;
-        document.head.appendChild(customAllocatorStyle);
+
+            return originalAllocate.call(this, cmt);
+        };
 
         // Apply anti-collision system
         // Add the collision prediction filter
@@ -307,9 +521,11 @@ function setupDanmakuOverlay(dList) {
             // Only filter comments that are within 3 seconds of the current time
             if (Math.abs(cmt.stime - currentTime) > 3000) return cmt;
 
-            // Get a class tag for the lane
-            const laneIndex = Math.floor(cmt.y / lineHeight);
-            cmt.className = (laneIndex % 2 === 0) ? 'lane-even' : 'lane-odd';
+            // Randomly vary the size slightly to add visual diversity
+            if (Math.random() < 0.3) {
+                const sizeFactor = 0.9 + (Math.random() * 0.2); // 0.9 to 1.1
+                cmt.size = Math.round(cmt.size * sizeFactor);
+            }
 
             return cmt;
         };
@@ -336,7 +552,7 @@ function setupDanmakuOverlay(dList) {
         synchronizeDanmakuWithVideo();
         addResizeObserver();
 
-        console.log('🍥 Loaded', formattedComments.length, 'comments');
+        console.log('🍥 Loaded', formattedComments.length, 'comments after density filtering');
     } catch (error) {
         console.error('🍥 Error in setupDanmakuOverlay:', error);
     }
