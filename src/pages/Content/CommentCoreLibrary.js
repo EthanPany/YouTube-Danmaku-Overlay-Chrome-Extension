@@ -260,7 +260,7 @@ export const CommentManager = (function () {
     };
 
     CommentManagerInternal.prototype.time = function (time) {
-        time = time - 1; // Restored time offset
+        // Removed the "time - 1" offset that was causing timing issues
         if (this.position >= this.timeline.length ||
             Math.abs(this._lastPosition - time) >= this.options.seekTrigger) {
 
@@ -1014,12 +1014,17 @@ export const CommentSpaceAllocator = (function () {
         this._pools = [
             []
         ];
-        this.avoid = 1; // Restored original spacing
+        this.avoid = 2; // Increased spacing between comments (was 1)
         this._width = width;
         this._height = height;
     }
     CommentSpaceAllocator.prototype.willCollide = function (existing, check) {
-        return existing.stime + existing.ttl >= check.stime + check.ttl / 2; // Restored original collision logic
+        // Improved collision detection to better distribute comments
+        // Original collision logic caused comments to stack
+        if (existing.mode === check.mode) {
+            return existing.bottom > check.y && check.bottom > existing.y;
+        }
+        return existing.stime + existing.ttl >= check.stime + check.ttl / 2;
     };
     CommentSpaceAllocator.prototype.pathCheck = function (y, comment, pool) {
         var bottom = y + comment.height;
@@ -1072,21 +1077,71 @@ export const CommentSpaceAllocator = (function () {
         if (comment.height > this._height) {
             comment.cindex = -2;
             comment.y = 0;
+            return;
         }
-        else {
-            comment.y = this.assign(comment, 0);
-            BinArray.binsert(this._pools[comment.cindex], comment, function (a, b) {
-                if (a.bottom < b.bottom) {
-                    return -1;
+
+        // For mode 1 (scrolling) comments, try to distribute them more evenly
+        if (comment.mode === 1 || comment.mode === 2 || comment.mode === 6) {
+            // Divide height into zones for better distribution
+            const zoneHeight = Math.min(comment.height * 1.5, this._height / 8);
+            const numZones = Math.floor(this._height / zoneHeight);
+
+            if (numZones > 1) {
+                // Try finding a zone with fewer comments
+                let bestZone = 0;
+                let minComments = Infinity;
+
+                for (let i = 0; i < numZones; i++) {
+                    const zoneY = i * zoneHeight;
+                    let count = 0;
+
+                    // Count comments in this zone across all pools
+                    for (let p = 0; p < this._pools.length; p++) {
+                        for (let j = 0; j < this._pools[p].length; j++) {
+                            const c = this._pools[p][j];
+                            // Check if comment overlaps with this zone
+                            if (c.bottom > zoneY && c.y < zoneY + zoneHeight) {
+                                count++;
+                            }
+                        }
+                    }
+
+                    // Find zone with fewest comments
+                    if (count < minComments) {
+                        minComments = count;
+                        bestZone = i;
+                    }
                 }
-                else if (a.bottom > b.bottom) {
-                    return 1;
-                }
-                else {
-                    return 0;
-                }
-            });
+
+                // Position comment in the chosen zone
+                const y = bestZone * zoneHeight + (Math.random() * (zoneHeight - comment.height));
+                comment.cindex = 0; // Use first pool
+                comment.y = y;
+
+                BinArray.binsert(this._pools[0], comment, function (a, b) {
+                    if (a.bottom < b.bottom) {
+                        return -1;
+                    } else if (a.bottom > b.bottom) {
+                        return 1;
+                    } else {
+                        return 0;
+                    }
+                });
+                return;
+            }
         }
+
+        // Default allocation algorithm for other cases
+        comment.y = this.assign(comment, 0);
+        BinArray.binsert(this._pools[comment.cindex], comment, function (a, b) {
+            if (a.bottom < b.bottom) {
+                return -1;
+            } else if (a.bottom > b.bottom) {
+                return 1;
+            } else {
+                return 0;
+            }
+        });
     };
     CommentSpaceAllocator.prototype.remove = function (comment) {
         if (comment.cindex < 0) {
@@ -1272,22 +1327,19 @@ export const CssScrollComment = (function (_super) {
         if (this._dirtyCSS && this.ttl > 0) {
             // Use current ttl for the remaining duration of the transition
             this.dom.style.transition = "transform " + this.ttl + "ms linear";
-            // Target transform: move to off-screen left
-            var targetX = (this.axis % 2 === 0 ? -this.width : this.parent.width + this.width); // Adjusted for bi-directional scroll
-            if (this.axis % 2 !== 0) { // Reverse scroll (mode 6), target is parent.width (effectively starts at -this.width)
-                // For reverse, initial X should be -this.width, target is parent.width.
-                // CssCompatLayer.transform(this.dom, "translateX(" + targetX + "px)"); 
-                // My init sets this.x from parent.width. For mode 6, init should be -this.width.
-                // This part needs mode-specific handling in init for starting pos.
-                // For now, assuming mode 1 (axis 0)
-                CssCompatLayer.transform(this.dom, "translateX(" + (-this.width) + "px)");
-            } else {
-                CssCompatLayer.transform(this.dom, "translateX(" + (-this.width) + "px)");
+            // Calculate target position for end of animation
+            let targetX;
+            if (this.axis % 2 === 0) { // Left-to-right axis (mode 1)
+                targetX = -this.width; // End off-screen to the left
+            } else { // Right-to-left axis (mode 6)
+                targetX = this.parent.width; // End off-screen to the right
             }
+
+            // Apply the transform to move to the target position
+            CssCompatLayer.transform(this.dom, "translateX(" + targetX + "px)");
             this._dirtyCSS = false;
         }
-        // If !this._dirtyCSS, CSS handles the animation. CoreComment.time() updates ttl.
-        // If ttl reaches 0, finish() is called.
+        // If !this._dirtyCSS, CSS transition handles the animation
     };
 
     CssScrollComment.prototype.stop = function () {

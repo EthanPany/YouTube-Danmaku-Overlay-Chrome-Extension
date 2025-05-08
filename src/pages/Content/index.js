@@ -209,28 +209,67 @@ function setupDanmakuOverlay(dList) {
         const width = videoElement ? videoElement.offsetWidth : 800;
         const height = videoElement ? videoElement.offsetHeight : 450;
 
+        // Add CSS to style the danmaku
+        const styleElement = document.createElement('style');
+        styleElement.textContent = `
+            #${DANMAKU_OVERLAY_ID} .cmt {
+                position: absolute;
+                color: #fff;
+                font-family: Arial, sans-serif;
+                font-weight: bold;
+                text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
+                will-change: transform;
+                white-space: nowrap;
+                line-height: 1.2;
+                user-select: none;
+                -webkit-text-size-adjust: none;
+                -webkit-font-smoothing: antialiased;
+            }
+            #${DANMAKU_OVERLAY_ID} .cmt.css-optimize {
+                will-change: transform;
+                transform: translateZ(0);
+                -webkit-transform: translateZ(0);
+            }
+            #${DANMAKU_OVERLAY_ID} .cmt.no-shadow {
+                text-shadow: none;
+            }
+            #${DANMAKU_OVERLAY_ID} .cmt.reverse-shadow {
+                text-shadow: -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff;
+            }
+        `;
+        document.head.appendChild(styleElement);
+
+        // Set global options
+        commentManager.options.global.opacity = 0.9; // Slightly transparent
+        commentManager.options.scroll.scale = 1.2; // Adjust speed (1.0 = normal, higher = faster)
+        commentManager.options.global.scale = 1.0; // Normal timing scale
+        commentManager.options.global.className = 'cmt'; // CSS class name
+        commentManager.options.limit = 0; // No limit on concurrent comments
+
         // Initialize with dimensions
-        commentManager.init();
+        commentManager.init('css'); // Specify 'css' renderer for better performance
         commentManager.setBounds(width, height);
 
         console.log('🍥 CommentManager initialized with dimensions:', width, 'x', height);
 
-        // Format and load comments
+        // Format and load comments with improved timing
         const formattedComments = dList.map(c => {
             // Ensure comment is within bounds
-            const baseSize = Math.min(height / 15, 25); // Scale with video height
+            const baseSize = Math.min(height / 20, 25); // Slightly smaller for density
             return {
                 text: c.text,
-                mode: 1, // Force mode 1 (scrolling) for now
+                mode: 1, // Scrolling right to left
                 stime: (typeof c.time === 'number' ? c.time : c.stime) * 1000, // Convert to milliseconds
-                dur: 4000 + Math.floor(Math.random() * 1000), // Slightly randomize duration
+                dur: 8000 + Math.round(width / 2), // Duration based on screen width plus base time
                 color: c.color || 0xffffff,
                 size: c.size || baseSize,
                 border: false,
-                shadow: true,
-                opacity: 1
+                shadow: true
             };
         });
+
+        // Sort by time to ensure proper sequencing
+        formattedComments.sort((a, b) => a.stime - b.stime);
 
         // Debug log
         if (formattedComments.length > 0) {
@@ -244,6 +283,8 @@ function setupDanmakuOverlay(dList) {
         const video = document.querySelector('video');
         if (video && !video.paused) {
             commentManager.start();
+            // Set initial time based on current video time
+            commentManager.time((video.currentTime) * 1000);
         }
 
         synchronizeDanmakuWithVideo();
@@ -274,7 +315,7 @@ function synchronizeDanmakuWithVideo() {
         play: () => {
             console.log('🍥 Video play event');
             commentManager.start();
-            commentManager.time((video.currentTime - 1) * 1000); // Add back the -1 offset
+            commentManager.time(video.currentTime * 1000); // Use exact time without offset
         },
         pause: () => {
             console.log('🍥 Video pause event');
@@ -286,14 +327,14 @@ function synchronizeDanmakuWithVideo() {
         },
         seeked: () => {
             console.log('🍥 Video seeked event');
-            commentManager.time((video.currentTime - 1) * 1000); // Add back the -1 offset
+            commentManager.time(video.currentTime * 1000); // Use exact time without offset
             if (!video.paused) {
                 commentManager.start();
             }
         },
         timeupdate: () => {
             if (!video.paused) {
-                commentManager.time((video.currentTime - 1) * 1000); // Add back the -1 offset
+                commentManager.time(video.currentTime * 1000); // Use exact time without offset
             }
         }
     };
@@ -314,7 +355,7 @@ function synchronizeDanmakuWithVideo() {
     // Start if video is playing
     if (!video.paused) {
         commentManager.start();
-        commentManager.time((video.currentTime - 1) * 1000); // Add back the -1 offset
+        commentManager.time(video.currentTime * 1000); // Use exact time without offset
     }
 }
 
