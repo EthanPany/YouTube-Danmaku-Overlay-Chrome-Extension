@@ -485,8 +485,17 @@ function setupDanmakuOverlay(dList) {
         console.log('🍥 Available lanes:', availableLanes);
 
         // Implement custom lane allocation to make danmaku appear more random
-        // Store active lanes to prioritize reuse
-        const activeLanes = new Array(availableLanes).fill(0);
+        // Store active lanes and their last use time
+        const laneStates = new Array(availableLanes).fill(null).map(() => ({
+            activeCount: 0,
+            lastUseTime: 0,
+            lastCommentId: null
+        }));
+
+        // Track the last allocated lane and time
+        let lastAllocatedLane = null;
+        let lastAllocationTime = 0;
+        let commentCounter = 0;
 
         // Override the default comment manager's allocate function
         const originalAllocate = commentManager.allocate;
@@ -498,42 +507,99 @@ function setupDanmakuOverlay(dList) {
 
             // Check if this is a new comment being added
             if (cmt._allocated !== true) {
+                const currentTime = Date.now();
                 const result = originalAllocate.call(this, cmt);
 
-                // Record the assigned lane
-                if (typeof cmt.y === 'number') {
-                    const assignedLane = Math.floor(cmt.y / lineHeight);
-                    if (assignedLane >= 0 && assignedLane < availableLanes) {
-                        activeLanes[assignedLane] += 1;
-                    }
+                // Generate a unique ID for this comment
+                cmt._id = commentCounter++;
 
-                    // Get list of lanes that already have comments
-                    const busyLanes = [];
-                    const emptyLanes = [];
-                    for (let i = 0; i < availableLanes; i++) {
-                        if (activeLanes[i] > 0) {
-                            busyLanes.push(i);
+                // Get current active comments
+                const activeComments = this.runline.filter(c =>
+                    c.mode === 1 && c.x > 0 && c.x < width);
+
+                // Update lane states based on active comments
+                laneStates.forEach((state, index) => {
+                    // Count active comments in this lane
+                    state.activeCount = activeComments.filter(c =>
+                        Math.floor(c.y / lineHeight) === index
+                    ).length;
+
+                    // Clear old last use times (over 5 seconds old)
+                    if (currentTime - state.lastUseTime > 5000) {
+                        state.lastUseTime = 0;
+                        state.lastCommentId = null;
+                    }
+                });
+
+                // Find lanes with no active comments
+                const emptyLanes = laneStates
+                    .map((state, index) => ({ index, state }))
+                    .filter(lane => lane.state.activeCount === 0);
+
+                // Find lanes with active comments
+                const busyLanes = laneStates
+                    .map((state, index) => ({ index, state }))
+                    .filter(lane => lane.state.activeCount > 0);
+
+                let selectedLane = null;
+
+                // If it's been more than 0.2s since last allocation and there are empty lanes,
+                // prefer starting from the top
+                if (currentTime - lastAllocationTime > 200 && emptyLanes.length > 0) {
+                    // Prioritize top lanes when screen is relatively empty
+                    const topLanes = emptyLanes.filter(lane => lane.index < availableLanes / 2);
+                    if (topLanes.length > 0) {
+                        selectedLane = topLanes[Math.floor(Math.random() * topLanes.length)].index;
+                    }
+                }
+
+                // If we haven't selected a lane yet, use normal allocation logic
+                if (selectedLane === null) {
+                    const availableLanesList = laneStates
+                        .map((state, index) => ({ index, state }))
+                        .filter(lane => {
+                            // Filter out the last used lane to prevent consecutive use
+                            if (lane.index === lastAllocatedLane) return false;
+
+                            // Filter out lanes that were used very recently
+                            if (currentTime - lane.state.lastUseTime < 200) return false;
+
+                            return true;
+                        });
+
+                    if (availableLanesList.length > 0) {
+                        // Prefer lanes with existing comments (50% chance) if available
+                        const useBusyLane = busyLanes.length > 0 && Math.random() < 0.5;
+                        const candidateLanes = useBusyLane
+                            ? availableLanesList.filter(lane => lane.state.activeCount > 0)
+                            : availableLanesList;
+
+                        if (candidateLanes.length > 0) {
+                            // Select a random lane from candidates
+                            selectedLane = candidateLanes[Math.floor(Math.random() * candidateLanes.length)].index;
                         } else {
-                            emptyLanes.push(i);
+                            // Fallback to any available lane
+                            selectedLane = availableLanesList[Math.floor(Math.random() * availableLanesList.length)].index;
                         }
+                    } else {
+                        // If no lanes are available, use original allocation
+                        selectedLane = Math.floor(cmt.y / lineHeight);
                     }
+                }
 
-                    // 70% chance to use a busy lane if available (to prevent line-by-line pattern)
-                    if (busyLanes.length > 0 && Math.random() < 0.7) {
-                        // Select a random busy lane
-                        const randomLane = busyLanes[Math.floor(Math.random() * busyLanes.length)];
+                // Apply the selected lane
+                if (selectedLane !== null) {
+                    // Add some random variation within the lane
+                    cmt.y = (selectedLane * lineHeight) + (Math.random() * lineHeight * 0.3);
 
-                        // Assign new vertical position with some random variation
-                        cmt.y = (randomLane * lineHeight) + (Math.random() * lineHeight * 0.4);
+                    // Update lane state
+                    laneStates[selectedLane].lastUseTime = currentTime;
+                    laneStates[selectedLane].lastCommentId = cmt._id;
+                    laneStates[selectedLane].activeCount++;
 
-                        // Update active lane counter
-                        activeLanes[randomLane] += 1;
-                    }
-                    // Otherwise, just add some randomness to the assigned lane
-                    else {
-                        // Add small random variation to y position
-                        cmt.y += (Math.random() - 0.5) * lineHeight * 0.3;
-                    }
+                    // Update last allocation tracking
+                    lastAllocatedLane = selectedLane;
+                    lastAllocationTime = currentTime;
                 }
 
                 // Mark as allocated
