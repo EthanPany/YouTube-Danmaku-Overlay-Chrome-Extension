@@ -124,10 +124,25 @@ var options = {
         ],
         exclude: /node_modules/,
       },
+      {
+        test: /node_modules\/comment-core-library\/.*\.js$/,
+        use: [
+          {
+            loader: 'babel-loader',
+            options: {
+              presets: ['@babel/preset-env'],
+              plugins: ['@babel/plugin-transform-modules-commonjs']
+            }
+          }
+        ]
+      },
     ],
   },
   resolve: {
-    alias: alias,
+    alias: {
+      ...alias,
+      'comment-core-library': path.resolve(__dirname, 'node_modules/comment-core-library/dist/CommentCoreLibrary.js')
+    },
     extensions: fileExtensions
       .map((extension) => '.' + extension)
       .concat(['.js', '.jsx', '.ts', '.tsx', '.css']),
@@ -182,6 +197,25 @@ var options = {
           to: path.join(__dirname, 'build'),
           force: true,
         },
+      ],
+    }),
+    new CopyWebpackPlugin({
+      patterns: [
+        {
+          from: 'node_modules/comment-core-library/dist/CommentCoreLibrary.js',
+          to: path.join(__dirname, 'build', 'comment-core-library.js'),
+          force: true,
+        },
+        {
+          from: 'src/pages/Content/ccl-setup.js',
+          to: path.join(__dirname, 'build', 'ccl-setup.js'),
+          force: true,
+        },
+        {
+          from: 'src/pages/Content/danmaku-operations.js',
+          to: path.join(__dirname, 'build', 'danmaku-operations.js'),
+          force: true,
+        }
       ],
     }),
     new HtmlWebpackPlugin({

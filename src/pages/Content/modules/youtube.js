@@ -11,7 +11,7 @@ export function extractYouTubeVideoData() {
         const duration = videoElement ? videoElement.duration : null;
 
         if (title && duration !== null) {
-            console.log('🍥 YouTube data extracted:', { title, duration });
+            // console.log('🍥 YouTube data extracted:', { title, duration });
             return { title, duration };
         } else {
             console.warn('🍥 Could not extract YouTube title or duration.');

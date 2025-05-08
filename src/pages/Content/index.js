@@ -4,10 +4,36 @@ import { extractYouTubeVideoData } from './modules/youtube';
 import { searchBili, getBilibiliVideoDetails, fetchDanmaku } from './modules/bilibili';
 import { findBestMatch } from './modules/match';
 import DanmakuMatchPopup from '../../containers/DanmakuMatchPopup/DanmakuMatchPopup';
+import { CommentManager } from './CommentCoreLibrary';
 
-// Attempt to import the distributed file directly to execute it
-// This might make CommentManager globally available in the content script scope
-import 'comment-core-library/dist/CommentCoreLibrary.js';
+// Create a script element to load CommentCoreLibrary
+const script = document.createElement('script');
+script.src = chrome.runtime.getURL('comment-core-library.js');
+script.onload = function () {
+    console.log('🍥 CommentCoreLibrary loaded, loading setup script');
+
+    // Load the setup script
+    const setupScript = document.createElement('script');
+    setupScript.src = chrome.runtime.getURL('ccl-setup.js');
+    setupScript.onload = function () {
+        // Load the operations script
+        const opsScript = document.createElement('script');
+        opsScript.src = chrome.runtime.getURL('danmaku-operations.js');
+        document.head.appendChild(opsScript);
+    };
+    document.head.appendChild(setupScript);
+};
+
+// Listen for CCL setup completion
+document.addEventListener('CCL_READY', function (event) {
+    if (event.detail.success) {
+        console.log('🍥 CommentManager setup completed successfully');
+    } else {
+        console.error('🍥 CommentManager setup failed:', event.detail.error);
+    }
+});
+
+document.head.appendChild(script);
 
 console.log('🍥 YouTube Danmaku Overlay Content Script Loaded 🍥');
 
@@ -182,75 +208,48 @@ function setupDanmakuOverlay(dList) {
         overlayDiv.style.left = '0';
         overlayDiv.style.width = '100%';
         overlayDiv.style.height = '100%';
-        overlayDiv.style.zIndex = '2000'; // Below popup but above video controls if possible
-        overlayDiv.style.pointerEvents = 'none'; // Allow clicks through to video player
+        overlayDiv.style.zIndex = '2000';
+        overlayDiv.style.pointerEvents = 'none';
 
-        const playerElement = document.querySelector('.html5-video-player'); // YouTube's player container
+        const playerElement = document.querySelector('.html5-video-player');
         if (playerElement) {
             playerElement.appendChild(overlayDiv);
         } else {
             console.warn("🍥 Could not find YouTube player element to attach overlay.");
-            // Fallback to body or #movie_player, though this might not be ideal for sizing
             (document.getElementById('movie_player') || document.body).appendChild(overlayDiv);
         }
     }
 
-    // Remove the previous require logic
-    // let CCL;
-    // try {
-    //     CCL = require('comment-core-library');
-    //     console.log('🍥 Successfully required "comment-core-library":', CCL);
-    // } catch (err) {
-    //     console.error('🍥 Failed to require "comment-core-library":', err);
-    //     return; // Cannot proceed
-    // }
-
     if (!commentManager) {
-        // Check if CommentManager is now globally available (likely on window or self)
-        let GlobalCommentManager = window.CommentManager || self.CommentManager;
-
-        if (typeof GlobalCommentManager === 'function') {
-            console.log('🍥 Using Global CommentManager found on window/self.');
-            commentManager = new GlobalCommentManager(overlayDiv);
+        try {
+            // Create and initialize CommentManager directly
+            commentManager = new CommentManager(overlayDiv);
             commentManager.init();
-        } else {
-            // Final fallback: Check if it exists directly in the scope without window/self prefix
-            // This is less likely but possible depending on how the script executes.
-            try {
-                if (typeof CommentManager === 'function') {
-                    console.log('🍥 Using CommentManager found directly in scope (fallback).');
-                    commentManager = new CommentManager(overlayDiv);
-                    commentManager.init();
-                } else {
-                    console.error('🍥 Critical: CommentManager constructor not found globally or directly in scope after importing dist file. GlobalCommentManager:', GlobalCommentManager);
-                    return; // Stop execution
-                }
-            } catch (e) {
-                console.error('🍥 Critical: Error accessing CommentManager directly. It might not be defined. Error:', e);
-                return; // Stop execution
-            }
+            console.log('🍥 CommentManager initialized successfully');
+        } catch (error) {
+            console.error('🍥 Failed to initialize CommentManager:', error);
+            return;
         }
-
-        // Optional: Configure CommentManager (e.g., speed, opacity, font)
-        // commentManager.options.scroll.duration = 8000; // 8 seconds to cross screen
-        // commentManager.options.global.opacity = 0.8;
     }
 
-    commentManager.clear(); // Clear any previous danmaku
-    commentManager.load(dList.map(c => ({
-        text: c.text,
-        mode: c.mode === 1 ? 1 : 1, // Ensure mode 1 for scrolling. CCL modes: 1 (scroll), 4 (bottom), 5 (top)
-        stime: c.time * 1000, // CCL expects milliseconds
-        // color: c.color, // Can add if parsed and desired
-        // size: c.size,   // Can add if parsed and desired
-    })));
-
-    // Start playback sync (Step 10)
-    synchronizeDanmakuWithVideo();
-    commentManager.start();
-    console.log('🍥 Danmaku overlay setup and CM started.');
+    // Load and display danmaku
+    try {
+        commentManager.clear();
+        commentManager.load(dList.map(c => ({
+            text: c.text,
+            mode: c.mode === 1 ? 1 : 1,
+            stime: c.time * 1000,
+            color: c.color || 0xffffff,
+            size: c.size || 25,
+            border: false
+        })));
+        commentManager.start();
+        synchronizeDanmakuWithVideo();
+        console.log('🍥 Danmaku loaded and started');
+    } catch (error) {
+        console.error('🍥 Error loading danmaku:', error);
+    }
 }
-
 
 function synchronizeDanmakuWithVideo() {
     const video = document.querySelector('video');
@@ -392,7 +391,7 @@ async function main() {
         }
 
         // Log the final data being sent to the popup
-        console.log('🍥 Final matchedBiliData for popup:', JSON.stringify(matchedBiliData, null, 2));
+        // console.log('🍥 Final matchedBiliData for popup:', JSON.stringify(matchedBiliData, null, 2));
 
         renderPopup(true);
 
@@ -419,3 +418,32 @@ function init() {
 
 // Run the initialization
 init();
+
+function getYouTubeVideoData() {
+    try {
+        const video = document.querySelector('video');
+        if (!video) {
+            console.warn('🍥 Video element not found');
+            return null;
+        }
+
+        // Get the actual duration from the video element
+        const duration = video.duration;
+
+        // Get the title from the page
+        const title = document.querySelector('h1.ytd-video-primary-info-renderer')?.textContent?.trim();
+
+        if (!title || !duration) {
+            console.warn('🍥 Could not extract complete video data', { title, duration });
+            return null;
+        }
+
+        return {
+            title,
+            duration
+        };
+    } catch (error) {
+        console.error('🍥 Error extracting YouTube video data:', error);
+        return null;
+    }
+}

@@ -234,11 +234,11 @@ const DanmakuMatchPopup = ({ matchData, onShowDanmaku, onClosePopup, initialOver
     const handleToggle = (e) => {
         e.stopPropagation(); // Prevent potential interference
         const newState = !isActive;
-        console.log(`🍥 Popup handleToggle: Called. Current isActive: ${isActive}, Setting internal state to: ${newState}`);
+        // console.log(`🍥 Popup handleToggle: Called. Current isActive: ${isActive}, Setting internal state to: ${newState}`);
         setIsActive(newState);
         if (onShowDanmaku) {
             // Pass the new state and necessary ID
-            console.log(`🍥 Popup handleToggle: Calling parent onShowDanmaku with state: ${newState}`);
+            // console.log(`🍥 Popup handleToggle: Calling parent onShowDanmaku with state: ${newState}`);
             onShowDanmaku(newState, matchData.cid || matchData.aid);
         }
     };

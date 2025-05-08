@@ -57,7 +57,7 @@ export async function searchBili(keyword) {
             pubdate: item.pubdate, // Include pubdate from search results too
         }));
 
-        console.log('🍥 Bilibili search results for ', keyword, results);
+        // console.log('🍥 Bilibili search results for ', keyword, results);
         return results;
 
     } catch (error) {
@@ -158,7 +158,7 @@ export async function getBilibiliVideoDetails(bvid) {
         // Add the primary CID directly for easier access if multi-part
         videoData.cid = videoData.cid || videoData.pages[0].cid;
 
-        console.log('🍥 Fetched Bilibili video details for BVID (via background):', bvid, videoData);
+        // console.log('🍥 Fetched Bilibili video details for BVID (via background):', bvid, videoData);
         return videoData; // Return the whole data object which includes owner, pubdate etc.
 
     } catch (error) {
