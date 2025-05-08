@@ -1080,43 +1080,56 @@ export const CommentSpaceAllocator = (function () {
             return;
         }
 
-        // For mode 1 (scrolling) comments, try to distribute them more evenly
+        // For scrolling comments (modes 1, 2, 6), use discrete lane-based allocation
         if (comment.mode === 1 || comment.mode === 2 || comment.mode === 6) {
-            // Divide height into zones for better distribution
-            const zoneHeight = Math.min(comment.height * 1.5, this._height / 8);
-            const numZones = Math.floor(this._height / zoneHeight);
+            // Calculate lane height based on comment height with some padding
+            const laneHeight = comment.height + 2;
+            const numLanes = Math.floor(this._height / laneHeight);
 
-            if (numZones > 1) {
-                // Try finding a zone with fewer comments
-                let bestZone = 0;
-                let minComments = Infinity;
+            if (numLanes > 1) {
+                // Create lanes array if it doesn't exist
+                if (!this._lanes) {
+                    this._lanes = new Array(numLanes).fill(0);
+                    this._laneTimes = new Array(numLanes).fill(0);
+                }
 
-                for (let i = 0; i < numZones; i++) {
-                    const zoneY = i * zoneHeight;
-                    let count = 0;
+                // If we need to resize the lanes array due to height change
+                if (this._lanes.length !== numLanes) {
+                    this._lanes = new Array(numLanes).fill(0);
+                    this._laneTimes = new Array(numLanes).fill(0);
+                }
 
-                    // Count comments in this zone across all pools
-                    for (let p = 0; p < this._pools.length; p++) {
-                        for (let j = 0; j < this._pools[p].length; j++) {
-                            const c = this._pools[p][j];
-                            // Check if comment overlaps with this zone
-                            if (c.bottom > zoneY && c.y < zoneY + zoneHeight) {
-                                count++;
-                            }
-                        }
-                    }
+                // Find the lane with the least density
+                let bestLane = 0;
+                let leastDensity = Number.MAX_VALUE;
+                const currentTime = Date.now();
 
-                    // Find zone with fewest comments
-                    if (count < minComments) {
-                        minComments = count;
-                        bestZone = i;
+                for (let i = 0; i < numLanes; i++) {
+                    // Calculate time-based density
+                    const timeDiff = currentTime - this._laneTimes[i];
+                    const density = this._lanes[i] - Math.max(0, timeDiff / 1000); // Reduce by 1 per second
+
+                    if (density < leastDensity) {
+                        leastDensity = density;
+                        bestLane = i;
                     }
                 }
 
-                // Position comment in the chosen zone
-                const y = bestZone * zoneHeight + (Math.random() * (zoneHeight - comment.height));
-                comment.cindex = 0; // Use first pool
+                // Update the lane stats
+                this._lanes[bestLane]++;
+                this._laneTimes[bestLane] = currentTime;
+
+                // Position the comment in the chosen lane
+                const y = bestLane * laneHeight;
+
+                // Set properties
+                comment.cindex = 0;
                 comment.y = y;
+
+                // Assign to first pool for simplicity
+                if (!this._pools[0]) {
+                    this._pools[0] = [];
+                }
 
                 BinArray.binsert(this._pools[0], comment, function (a, b) {
                     if (a.bottom < b.bottom) {
@@ -1127,11 +1140,14 @@ export const CommentSpaceAllocator = (function () {
                         return 0;
                     }
                 });
+
+                // Add lane index as a class for debugging/styling
+                comment.className = 'lane-' + bestLane;
                 return;
             }
         }
 
-        // Default allocation algorithm for other cases
+        // Default algorithm for other modes
         comment.y = this.assign(comment, 0);
         BinArray.binsert(this._pools[comment.cindex], comment, function (a, b) {
             if (a.bottom < b.bottom) {
@@ -1147,6 +1163,17 @@ export const CommentSpaceAllocator = (function () {
         if (comment.cindex < 0) {
             return;
         }
+
+        // For discrete lane allocation, update lane stats
+        if ((comment.mode === 1 || comment.mode === 2 || comment.mode === 6) && this._lanes) {
+            const laneHeight = comment.height + 2;
+            const laneIndex = Math.floor(comment.y / laneHeight);
+
+            if (laneIndex >= 0 && laneIndex < this._lanes.length) {
+                this._lanes[laneIndex] = Math.max(0, this._lanes[laneIndex] - 1);
+            }
+        }
+
         if (comment.cindex >= this._pools.length) {
             throw new Error('cindex out of bounds');
         }

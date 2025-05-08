@@ -271,6 +271,52 @@ function setupDanmakuOverlay(dList) {
         // Sort by time to ensure proper sequencing
         formattedComments.sort((a, b) => a.stime - b.stime);
 
+        // Add discrete lane allocation algorithm
+        // This helps with distributing comments in fixed vertical lanes
+        commentManager.options.density = 1; // Control display density (1 is normal, <1 is sparser)
+
+        // Update CommentSpaceAllocator to use fixed lane heights
+        const tempStyle = document.createElement('div');
+        tempStyle.className = 'cmt';
+        tempStyle.style.position = 'absolute';
+        tempStyle.style.visibility = 'hidden';
+        tempStyle.style.fontSize = `${Math.min(height / 20, 25)}px`;
+        tempStyle.textContent = 'Test';
+        document.body.appendChild(tempStyle);
+        const lineHeight = tempStyle.offsetHeight;
+        document.body.removeChild(tempStyle);
+
+        console.log('🍥 Using discrete lane height of', lineHeight, 'pixels');
+
+        // Custom CSS to identify comment paths and avoid collisions
+        const customAllocatorStyle = document.createElement('style');
+        customAllocatorStyle.textContent = `
+            #${DANMAKU_OVERLAY_ID} .cmt.lane-even {
+                border-top: 1px solid rgba(0,255,0,0.1);
+            }
+            #${DANMAKU_OVERLAY_ID} .cmt.lane-odd {
+                border-top: 1px solid rgba(255,0,0,0.1);
+            }
+        `;
+        document.head.appendChild(customAllocatorStyle);
+
+        // Apply anti-collision system
+        // Add the collision prediction filter
+        const denseCommentFilter = function (cmt) {
+            const currentTime = commentManager.options.currentPositionTime || 0;
+            // Only filter comments that are within 3 seconds of the current time
+            if (Math.abs(cmt.stime - currentTime) > 3000) return cmt;
+
+            // Get a class tag for the lane
+            const laneIndex = Math.floor(cmt.y / lineHeight);
+            cmt.className = (laneIndex % 2 === 0) ? 'lane-even' : 'lane-odd';
+
+            return cmt;
+        };
+
+        // Add the filter to the CommentManager
+        commentManager.filter.addModifier(denseCommentFilter);
+
         // Debug log
         if (formattedComments.length > 0) {
             console.log('🍥 Sample comment:', formattedComments[0]);
@@ -324,10 +370,19 @@ function synchronizeDanmakuWithVideo() {
         seeking: () => {
             console.log('🍥 Video seeking event');
             commentManager.stop();
+            commentManager.clear(); // Clear all comments when seeking
+            // Store the seek target time for use after seeking
+            video._seekTargetTime = video.currentTime;
         },
         seeked: () => {
             console.log('🍥 Video seeked event');
+            // Reset the comment manager's timeline position to the new time
+            commentManager.seek(video.currentTime * 1000);
             commentManager.time(video.currentTime * 1000); // Use exact time without offset
+
+            // Store current time as an option to be used by space allocator
+            commentManager.options.currentPositionTime = video.currentTime * 1000;
+
             if (!video.paused) {
                 commentManager.start();
             }
@@ -335,7 +390,14 @@ function synchronizeDanmakuWithVideo() {
         timeupdate: () => {
             if (!video.paused) {
                 commentManager.time(video.currentTime * 1000); // Use exact time without offset
+                // Update current position time for comment allocator
+                commentManager.options.currentPositionTime = video.currentTime * 1000;
             }
+        },
+        ended: () => {
+            console.log('🍥 Video ended event');
+            commentManager.stop();
+            commentManager.clear(); // Clear all comments when video ends
         }
     };
 
@@ -351,6 +413,9 @@ function synchronizeDanmakuWithVideo() {
     const width = video.offsetWidth;
     const height = video.offsetHeight;
     commentManager.setBounds(width, height);
+
+    // Store initial position time
+    commentManager.options.currentPositionTime = video.currentTime * 1000;
 
     // Start if video is playing
     if (!video.paused) {
