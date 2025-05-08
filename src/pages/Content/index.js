@@ -563,9 +563,9 @@ async function main() {
         }
 
         // Log the final data being sent to the popup
-        console.log('🍥 Final matchedBiliData for popup:', JSON.stringify(matchedBiliData, null, 2));
+        // console.log('🍥 Final matchedBiliData for popup:', JSON.stringify(matchedBiliData, null, 2));
 
-        renderPopup(true);
+        renderPopup(true); s
 
         // If initial state is active, fetch and show danmaku immediately
         if (currentOverlayState) {

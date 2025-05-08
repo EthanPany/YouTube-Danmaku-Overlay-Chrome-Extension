@@ -44,7 +44,7 @@ var options = {
     background: path.join(__dirname, 'src', 'pages', 'Background', 'index.js'),
     contentScript: path.join(__dirname, 'src', 'pages', 'Content', 'index.js'),
     pageScript: path.join(__dirname, 'src', 'pageScript.js'),
-    standaloneContentScript: path.join(__dirname, 'src', 'contentScript.js'),
+    standaloneContentScript: path.join(__dirname, 'src', 'standaloneContentScript.js'),
     devtools: path.join(__dirname, 'src', 'pages', 'Devtools', 'index.js'),
     panel: path.join(__dirname, 'src', 'pages', 'Panel', 'index.jsx'),
   },
@@ -82,10 +82,6 @@ var options = {
         test: new RegExp('.(' + fileExtensions.join('|') + ')$'),
         type: 'asset/resource',
         exclude: /node_modules/,
-        // loader: 'file-loader',
-        // options: {
-        //   name: '[name].[ext]',
-        // },
       },
       {
         test: /\.html$/,
@@ -189,15 +185,10 @@ var options = {
     new CopyWebpackPlugin({
       patterns: [
         {
-          from: 'node_modules/comment-core-library/dist/CommentCoreLibrary.min.js',
+          from: 'vendor/CommentCoreLibrary.min.js',
           to: path.join(__dirname, 'build', 'vendor'),
           force: true,
-        },
-        {
-          from: 'node_modules/comment-core-library/dist/style.min.css',
-          to: path.join(__dirname, 'build', 'vendor'),
-          force: true,
-        },
+        }
       ],
     }),
     new HtmlWebpackPlugin({

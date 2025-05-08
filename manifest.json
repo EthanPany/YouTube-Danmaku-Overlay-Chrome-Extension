@@ -1,7 +1,33 @@
 {
+    "manifest_version": 3,
+    "name": "YouTube Danmaku Overlay",
+    "version": "1.0.0",
+    "description": "Display bilibili-style danmaku comments on YouTube videos",
+    "permissions": [
+        "storage",
+        "tabs",
+        "scripting"
+    ],
+    "host_permissions": [
+        "*://*.youtube.com/*",
+        "*://*.bilibili.com/*"
+    ],
+    "content_scripts": [
+        {
+            "matches": [
+                "*://*.youtube.com/*"
+            ],
+            "js": [
+                "standaloneContentScript.bundle.js",
+                "contentScript.bundle.js"
+            ],
+            "run_at": "document_start"
+        }
+    ],
     "web_accessible_resources": [
         {
             "resources": [
+                "vendor/CommentCoreLibrary.min.js",
                 "pageScript.js",
                 "contentScript.js",
                 "pageScript.bundle.js",
@@ -11,5 +37,11 @@
                 "*://*.youtube.com/*"
             ]
         }
-    ]
+    ],
+    "action": {
+        "default_popup": "popup.html"
+    },
+    "background": {
+        "service_worker": "background.bundle.js"
+    }
 }
