@@ -7,7 +7,11 @@ Bring the vibrant Bilibili-style danmaku (live scrolling comments) experience to
 It's a fun project aimed at bridging the viewing experiences of two popular video platforms.
 
 ## **Demo**
-[![Demo GIF](https://media4.giphy.com/media/v1.Y2lkPTc5MGI3NjExNzRkb3VmaTN0Y3c5bHF1bnRjdGc0ZWYyY2xldjVpcTVwOGNrbnUyMyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/XbVEFTxQCoAPGUq98s/giphy.gif)](https://youtu.be/g9qKdpwL2Dc)
+[![Demo GIF](https://media1.giphy.com/media/v1.Y2lkPTc5MGI3NjExbG54ZG9pczMxNzl2dWZkeWw5dDBzd29pb3FrMzVqZ2E0NG9rbmpoNiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/yXDwXWSpvYeYoXBiLt/giphy.gif
+)](https://youtu.be/g9qKdpwL2Dc)
+
+
+
 
 
 ## ✨ Features
