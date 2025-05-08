@@ -76,6 +76,7 @@ const titleStyles = {
     textOverflow: 'ellipsis',
     lineHeight: '1.4',
     maxHeight: 'calc(1.4em * 2)', // Corresponds to WebkitLineClamp * lineHeight
+    paddingRight: '12px', // Add padding to prevent overlap with close button
 };
 
 const metadataContainerStyles = {
@@ -115,16 +116,29 @@ const buttonStyles = {
 
 const closeButtonStyles = {
     position: 'absolute',
-    top: '8px',
-    right: '10px',
+    top: '6px',
+    right: '8px',
     background: 'transparent',
     border: 'none',
     color: '#aaa',
     fontSize: '20px',
     cursor: 'pointer',
-    padding: '0',
+    padding: '4px',
     lineHeight: '1',
-    zIndex: 1, // Above other elements in the popup
+    zIndex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '24px',
+    height: '24px',
+    borderRadius: '50%',
+    transition: 'background-color 0.2s ease, color 0.2s ease',
+    backgroundColor: 'transparent', // Explicitly set the default background
+};
+
+const closeButtonHoverStyles = {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    color: '#fff',
 };
 
 // --- Toggle Switch Styles --- (New)
@@ -220,6 +234,7 @@ function formatDate(timestamp) {
 const DanmakuMatchPopup = ({ matchData, onShowDanmaku, onClosePopup, initialOverlayActive }) => {
     const [isActive, setIsActive] = useState(initialOverlayActive);
     const [isFullscreen, setIsFullscreen] = useState(false);
+    const [isCloseHovered, setIsCloseHovered] = useState(false);
 
     useEffect(() => {
         const handleFullscreenChange = () => {
@@ -282,7 +297,15 @@ const DanmakuMatchPopup = ({ matchData, onShowDanmaku, onClosePopup, initialOver
 
     return (
         <div style={popupStyles}>
-            <button style={closeButtonStyles} onClick={handleClose} title="Close Popup">&times;</button>
+            <button
+                style={{ ...closeButtonStyles, ...(isCloseHovered ? closeButtonHoverStyles : {}) }}
+                onClick={handleClose}
+                onMouseEnter={() => setIsCloseHovered(true)}
+                onMouseLeave={() => setIsCloseHovered(false)}
+                title="Close Popup"
+            >
+                &times;
+            </button>
 
             <div style={contentStyles}>
                 {videoThumbnail && <img src={videoThumbnail} alt="Video thumbnail" style={thumbnailStyles} referrerPolicy="no-referrer" />}

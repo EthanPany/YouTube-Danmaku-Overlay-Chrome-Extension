@@ -179,13 +179,31 @@ function applyDensityFilter(danmakuList, videoDuration, targetMaxDensity = null,
         });
     });
 
-    // Find the maximum density
-    const maxDensityWindow = timeWindows.reduce((max, window) =>
-        window.count > max.count ? window : max, { count: 0 });
+    // Add density smoothing window
+    const smoothingWindowSize = 3; // Number of windows to average
+    const smoothedWindows = [];
 
-    // Calculate scaling factor - less aggressive scaling
-    let scalingFactor = maxDensityWindow.count > targetMaxDensity
-        ? targetMaxDensity / maxDensityWindow.count
+    for (let i = 0; i < timeWindows.length; i++) {
+        let sum = 0;
+        let count = 0;
+        // Look at surrounding windows
+        for (let j = Math.max(0, i - smoothingWindowSize); j < Math.min(timeWindows.length, i + smoothingWindowSize + 1); j++) {
+            sum += timeWindows[j].count;
+            count++;
+        }
+        smoothedWindows.push({
+            ...timeWindows[i],
+            smoothedCount: Math.round(sum / count)
+        });
+    }
+
+    // Use smoothed counts for density calculations
+    const maxDensityWindow = smoothedWindows.reduce((max, window) =>
+        window.smoothedCount > max.smoothedCount ? window : max, { smoothedCount: 0 });
+
+    // Calculate scaling factor using smoothed density
+    let scalingFactor = maxDensityWindow.smoothedCount > targetMaxDensity
+        ? targetMaxDensity / maxDensityWindow.smoothedCount
         : 1.0;
 
     // Apply a smaller reduction (15% instead of 30%)
@@ -199,7 +217,7 @@ function applyDensityFilter(danmakuList, videoDuration, targetMaxDensity = null,
     scalingFactor = Math.min(scalingFactor * reductionFactor, reductionFactor);
 
     console.log('🍥 Density analysis:', {
-        maxDensity: maxDensityWindow.count,
+        maxDensity: maxDensityWindow.smoothedCount,
         targetDensity: targetMaxDensity,
         scalingFactor: scalingFactor,
         reductionFactor,
@@ -207,7 +225,7 @@ function applyDensityFilter(danmakuList, videoDuration, targetMaxDensity = null,
     });
 
     // More strict threshold for no filtering - only if very sparse
-    if (scalingFactor >= reductionFactor && maxDensityWindow.count < Math.max(10, Math.floor(10 * areaFactor))) {
+    if (scalingFactor >= reductionFactor && maxDensityWindow.smoothedCount < Math.max(10, Math.floor(10 * areaFactor))) {
         console.log('🍥 Density is acceptable, no filtering needed');
         return danmakuList;
     }
@@ -484,125 +502,252 @@ function setupDanmakuOverlay(dList) {
         const availableLanes = Math.floor(height / lineHeight);
         console.log('🍥 Available lanes:', availableLanes);
 
-        // Implement custom lane allocation to make danmaku appear more random
+        let lastAllocatedLane = -1; // Add this line to track last allocated lane
+        let lastAllocationTime = 0; // Add this line to track last allocation time
+        let commentCounter = 0; // Add this line to track comment IDs
+
         // Store active lanes and their last use time
         const laneStates = new Array(availableLanes).fill(null).map(() => ({
             activeCount: 0,
             lastUseTime: 0,
-            lastCommentId: null
+            lastCommentId: null,
+            weight: 1.0 // Add weight for lane preference
         }));
 
-        // Track the last allocated lane and time
-        let lastAllocatedLane = null;
-        let lastAllocationTime = 0;
-        let commentCounter = 0;
+        // Add logging function for lane changes
+        function logLaneChange(commentId, fromLane, toLane, reason) {
+            console.log(`🍥 Lane Change - Comment ${commentId}: ${fromLane} → ${toLane} (${reason})`);
+        }
+
+        // Add logging function for danmaku initialization
+        function logDanmakuInit(comment, lane, position) {
+            console.log(`🍥 Danmaku Init - ID: ${comment._id}, Text: "${comment.text}", Lane: ${lane}, Position: ${Math.round(position)}`);
+        }
+
+        // Track top return cooldown
+        let lastTopReturnTime = 0;
+        const TOP_RETURN_COOLDOWN = 300;
+        const TOP_LANES_COUNT = Math.max(2, Math.floor(availableLanes / 6));
+        const MIN_HORIZONTAL_GAP = width * 0.15; // Minimum gap between comments in first line
+
+        // Track pending returns to stagger them
+        const pendingTopReturns = [];
+
+        // Track comments in top lanes and their progress
+        const topLaneTracker = new Map(); // Map<commentId, {x, width, lane, progress}>
+
+        // Check if a new comment would overlap with existing ones in the first line
+        function wouldOverlap(x, commentWidth) {
+            for (const [_, data] of topLaneTracker) {
+                if (data.lane === 0) { // Only check first line
+                    // Check if there's enough horizontal gap
+                    const gap = x - (data.x - data.width);
+                    if (Math.abs(gap) < MIN_HORIZONTAL_GAP) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        // Process pending returns periodically
+        function processPendingReturns() {
+            const currentTime = Date.now();
+
+            // Clean up old tracked comments more aggressively
+            for (const [commentId, data] of topLaneTracker) {
+                // Remove if comment is off screen or too old
+                if (data.x < 0 || data.x > width || currentTime - data.lastUpdate > 200) {
+                    topLaneTracker.delete(commentId);
+                    if (data.lane < TOP_LANES_COUNT) {
+                        laneStates[data.lane].activeCount = Math.max(0, laneStates[data.lane].activeCount - 1);
+                    }
+                }
+            }
+
+            if (pendingTopReturns.length > 0 && currentTime - lastTopReturnTime >= TOP_RETURN_COOLDOWN) {
+                const nextReturn = pendingTopReturns.shift();
+                if (nextReturn && !nextReturn.cmt._allocated) {
+                    // Calculate comment width (approximate)
+                    const tempDiv = document.createElement('div');
+                    tempDiv.style.position = 'absolute';
+                    tempDiv.style.visibility = 'hidden';
+                    tempDiv.style.fontSize = `${nextReturn.cmt.size}px`;
+                    tempDiv.textContent = nextReturn.cmt.text;
+                    document.body.appendChild(tempDiv);
+                    const commentWidth = tempDiv.offsetWidth;
+                    document.body.removeChild(tempDiv);
+
+                    // Find the most progressed comment in top lanes
+                    let maxProgress = 0;
+                    let availableTopLane = null;
+
+                    // Check first line overlap
+                    const wouldOverlapFirst = wouldOverlap(width, commentWidth);
+
+                    for (let i = 0; i < TOP_LANES_COUNT; i++) {
+                        let laneInUse = false;
+                        let laneProgress = 0;
+
+                        // Check all comments in this lane
+                        for (const [_, data] of topLaneTracker) {
+                            if (data.lane === i) {
+                                laneInUse = true;
+                                laneProgress = Math.max(laneProgress, data.progress);
+                            }
+                        }
+
+                        if (!laneInUse && (!wouldOverlapFirst || i > 0)) {
+                            availableTopLane = i;
+                            break;
+                        } else {
+                            maxProgress = Math.max(maxProgress, laneProgress);
+                        }
+                    }
+
+                    // If we found an empty lane or existing comments are progressed enough
+                    const shouldUseTop = availableTopLane !== null ||
+                        (maxProgress > 0.75 && !wouldOverlapFirst) || // 100% chance if past 3/4
+                        (maxProgress > 0.4 && Math.random() < 0.7 && !wouldOverlapFirst) || // 70% chance if past 2/5
+                        (maxProgress > 0.33 && Math.random() < 0.5 && !wouldOverlapFirst); // 50% chance if past 1/3
+
+                    if (shouldUseTop && !wouldOverlapFirst) {
+                        // If no empty lane but we should use top, use first lane
+                        const targetLane = availableTopLane !== null ? availableTopLane : 0;
+                        nextReturn.cmt.y = (targetLane * lineHeight) + (Math.random() * lineHeight * 0.2);
+
+                        // Log the lane change for top return
+                        logLaneChange(nextReturn.cmt._id, 'pending', targetLane, 'top-return');
+                        logDanmakuInit(nextReturn.cmt, targetLane, width);
+
+                        // Track this comment with width info
+                        topLaneTracker.set(nextReturn.cmt._id, {
+                            x: width,
+                            width: commentWidth,
+                            lane: targetLane,
+                            progress: 0,
+                            lastUpdate: currentTime
+                        });
+
+                        laneStates[targetLane].lastUseTime = currentTime;
+                        laneStates[targetLane].activeCount++;
+                        lastTopReturnTime = currentTime;
+                    } else {
+                        // Use a middle lane if we can't use top
+                        const midLane = Math.floor(availableLanes / 4) +
+                            Math.floor(Math.random() * (availableLanes / 4));
+                        nextReturn.cmt.y = (midLane * lineHeight) + (Math.random() * lineHeight * 0.3);
+                    }
+
+                    nextReturn.cmt._allocated = true;
+                    nextReturn.resolve(nextReturn.result);
+                }
+            }
+        }
+
+        // Process returns more frequently
+        setInterval(processPendingReturns, 33); // Increased frequency to 30fps
+
+        // Update comment progress tracking
+        function updateCommentProgress() {
+            const currentComments = commentManager.runline.filter(c =>
+                c.mode === 1 && c.x > 0 && c.x < width);
+
+            for (const comment of currentComments) {
+                if (comment._id && topLaneTracker.has(comment._id)) {
+                    const data = topLaneTracker.get(comment._id);
+                    const progress = 1 - (comment.x / width);
+                    topLaneTracker.set(comment._id, {
+                        ...data,
+                        x: comment.x,
+                        progress,
+                        lastUpdate: Date.now()
+                    });
+                }
+            }
+        }
+
+        // Update progress tracking more frequently
+        setInterval(updateCommentProgress, 33);
 
         // Override the default comment manager's allocate function
         const originalAllocate = commentManager.allocate;
         commentManager.allocate = function (cmt) {
-            // Only override for scrolling comments
-            if (cmt.mode !== 1) {
-                return originalAllocate.call(this, cmt);
-            }
+            if (cmt.mode !== 1) return originalAllocate.call(this, cmt);
 
-            // Check if this is a new comment being added
             if (cmt._allocated !== true) {
                 const currentTime = Date.now();
                 const result = originalAllocate.call(this, cmt);
 
-                // Generate a unique ID for this comment
                 cmt._id = commentCounter++;
 
-                // Get current active comments
+                // Update active comments and lane states
                 const activeComments = this.runline.filter(c =>
                     c.mode === 1 && c.x > 0 && c.x < width);
 
-                // Update lane states based on active comments
+                // Update lane states
                 laneStates.forEach((state, index) => {
-                    // Count active comments in this lane
-                    state.activeCount = activeComments.filter(c =>
-                        Math.floor(c.y / lineHeight) === index
-                    ).length;
+                    // Don't count top lanes here - they're managed by topLaneTracker
+                    if (index >= TOP_LANES_COUNT) {
+                        state.activeCount = activeComments.filter(c =>
+                            Math.floor(c.y / lineHeight) === index
+                        ).length;
+                    }
 
-                    // Clear old last use times (over 5 seconds old)
                     if (currentTime - state.lastUseTime > 5000) {
                         state.lastUseTime = 0;
                         state.lastCommentId = null;
                     }
                 });
 
-                // Find lanes with no active comments
-                const emptyLanes = laneStates
+                // Get available lanes with weights
+                const availableLanes = laneStates
                     .map((state, index) => ({ index, state }))
-                    .filter(lane => lane.state.activeCount === 0);
+                    .filter(lane => {
+                        if (lane.index === lastAllocatedLane) return false;
+                        if (currentTime - lane.state.lastUseTime < 200) return false;
+                        // Don't allocate to top lanes through normal process
+                        if (lane.index < TOP_LANES_COUNT) return false;
+                        return true;
+                    });
 
-                // Find lanes with active comments
-                const busyLanes = laneStates
-                    .map((state, index) => ({ index, state }))
-                    .filter(lane => lane.state.activeCount > 0);
+                if (availableLanes.length > 0) {
+                    // Calculate weighted probabilities
+                    const totalWeight = availableLanes.reduce((sum, lane) =>
+                        sum + lane.state.weight, 0);
 
-                let selectedLane = null;
+                    // Select lane using weighted random
+                    let random = Math.random() * totalWeight;
+                    let selectedLane = availableLanes[0].index;
 
-                // If it's been more than 0.2s since last allocation and there are empty lanes,
-                // prefer starting from the top
-                if (currentTime - lastAllocationTime > 200 && emptyLanes.length > 0) {
-                    // Prioritize top lanes when screen is relatively empty
-                    const topLanes = emptyLanes.filter(lane => lane.index < availableLanes / 2);
-                    if (topLanes.length > 0) {
-                        selectedLane = topLanes[Math.floor(Math.random() * topLanes.length)].index;
-                    }
-                }
-
-                // If we haven't selected a lane yet, use normal allocation logic
-                if (selectedLane === null) {
-                    const availableLanesList = laneStates
-                        .map((state, index) => ({ index, state }))
-                        .filter(lane => {
-                            // Filter out the last used lane to prevent consecutive use
-                            if (lane.index === lastAllocatedLane) return false;
-
-                            // Filter out lanes that were used very recently
-                            if (currentTime - lane.state.lastUseTime < 200) return false;
-
-                            return true;
-                        });
-
-                    if (availableLanesList.length > 0) {
-                        // Prefer lanes with existing comments (50% chance) if available
-                        const useBusyLane = busyLanes.length > 0 && Math.random() < 0.5;
-                        const candidateLanes = useBusyLane
-                            ? availableLanesList.filter(lane => lane.state.activeCount > 0)
-                            : availableLanesList;
-
-                        if (candidateLanes.length > 0) {
-                            // Select a random lane from candidates
-                            selectedLane = candidateLanes[Math.floor(Math.random() * candidateLanes.length)].index;
-                        } else {
-                            // Fallback to any available lane
-                            selectedLane = availableLanesList[Math.floor(Math.random() * availableLanesList.length)].index;
+                    for (const lane of availableLanes) {
+                        random -= lane.state.weight;
+                        if (random <= 0) {
+                            selectedLane = lane.index;
+                            break;
                         }
-                    } else {
-                        // If no lanes are available, use original allocation
-                        selectedLane = Math.floor(cmt.y / lineHeight);
                     }
-                }
 
-                // Apply the selected lane
-                if (selectedLane !== null) {
-                    // Add some random variation within the lane
+                    // Apply selected lane with variation
                     cmt.y = (selectedLane * lineHeight) + (Math.random() * lineHeight * 0.3);
 
-                    // Update lane state
+                    // Log the lane allocation
+                    logLaneChange(cmt._id, 'new', selectedLane, 'initial-allocation');
+                    logDanmakuInit(cmt, selectedLane, width);
+
+                    // Update state
                     laneStates[selectedLane].lastUseTime = currentTime;
                     laneStates[selectedLane].lastCommentId = cmt._id;
                     laneStates[selectedLane].activeCount++;
-
-                    // Update last allocation tracking
                     lastAllocatedLane = selectedLane;
                     lastAllocationTime = currentTime;
+                } else {
+                    // Queue for top return with higher priority
+                    return new Promise((resolve) => {
+                        pendingTopReturns.push({ cmt, result, resolve });
+                    });
                 }
 
-                // Mark as allocated
                 cmt._allocated = true;
                 return result;
             }
