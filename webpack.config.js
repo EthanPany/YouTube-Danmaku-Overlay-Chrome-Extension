@@ -121,11 +121,13 @@ var options = {
           },
         ],
         exclude: /node_modules/,
-      },
+      }
     ],
   },
   resolve: {
-    alias: alias,
+    alias: {
+      ...alias
+    },
     extensions: fileExtensions
       .map((extension) => '.' + extension)
       .concat(['.js', '.jsx', '.ts', '.tsx', '.css']),
@@ -134,7 +136,6 @@ var options = {
     isDevelopment && new ReactRefreshWebpackPlugin(),
     new CleanWebpackPlugin({ verbose: false }),
     new webpack.ProgressPlugin(),
-    // expose and write the allowed env vars on the compiled bundle
     new webpack.EnvironmentPlugin(['NODE_ENV']),
     new CopyWebpackPlugin({
       patterns: [
@@ -143,7 +144,6 @@ var options = {
           to: path.join(__dirname, 'build'),
           force: true,
           transform: function (content, path) {
-            // generates the manifest file using the package.json informations
             return Buffer.from(
               JSON.stringify({
                 description: process.env.npm_package_description,
@@ -220,7 +220,7 @@ var options = {
       filename: 'panel.html',
       chunks: ['panel'],
       cache: false,
-    }),
+    })
   ].filter(Boolean),
   infrastructureLogging: {
     level: 'info',

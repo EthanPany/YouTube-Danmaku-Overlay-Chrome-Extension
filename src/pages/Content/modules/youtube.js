@@ -8,11 +8,18 @@ export function extractYouTubeVideoData() {
         const title = titleElement ? titleElement.content : null;
 
         const videoElement = document.querySelector('video');
-        const duration = videoElement ? videoElement.duration : null;
+        let duration = videoElement ? videoElement.duration : null;
+
+        // Check if duration is suspiciously short (less than 1 minute)
+        // This could indicate we're getting the ad duration instead of video duration
+        const isSuspiciouslyShort = duration !== null && duration < 60;
+        if (isSuspiciouslyShort) {
+            console.warn('🍥 Suspiciously short duration detected:', duration, 'seconds. Might be an ad.');
+        }
 
         if (title && duration !== null) {
-            console.log('🍥 YouTube data extracted:', { title, duration });
-            return { title, duration };
+            // console.log('🍥 YouTube data extracted:', { title, duration });
+            return { title, duration, isSuspiciouslyShort };
         } else {
             console.warn('🍥 Could not extract YouTube title or duration.');
             if (!titleElement) console.warn('Meta title element not found.');

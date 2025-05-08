@@ -50,9 +50,9 @@ export function findBestMatch(youtubeData, bilibiliResults, titleSimilarityThres
             durationDifference = Math.abs(youtubeData.duration - biliDurationSeconds);
         }
 
-        console.log(`🍥 Comparing with Bili: "${biliVideo.title}"`,
-            `YT Duration: ${youtubeData.duration.toFixed(2)}s, Bili Duration: ${biliDurationSeconds === null ? 'N/A' : biliDurationSeconds + 's'}`,
-            `Title Sim: ${titleSimilarity.toFixed(2)}, Duration Diff: ${durationDifference === Infinity ? 'N/A' : durationDifference.toFixed(2) + 's'}`);
+        //console.log(`🍥 Comparing with Bili: "${biliVideo.title}"`,
+        //    `YT Duration: ${youtubeData.duration.toFixed(2)}s, Bili Duration: ${biliDurationSeconds === null ? 'N/A' : biliDurationSeconds + 's'}`,
+        //    `Title Sim: ${titleSimilarity.toFixed(2)}, Duration Diff: ${durationDifference === Infinity ? 'N/A' : durationDifference.toFixed(2) + 's'}`);
 
         // 3. Apply thresholds and find best score
         // Simple scoring: prioritize title similarity, then duration. Can be improved.
@@ -69,7 +69,7 @@ export function findBestMatch(youtubeData, bilibiliResults, titleSimilarityThres
     }
 
     if (bestMatch) {
-        console.log('🍥 Best match found:', bestMatch, `Score: ${highestScore.toFixed(2)}`);
+        //console.log('🍥 Best match found:', bestMatch, `Score: ${highestScore.toFixed(2)}`);
     } else {
         console.log('🍥 No suitable match found based on current thresholds.');
     }

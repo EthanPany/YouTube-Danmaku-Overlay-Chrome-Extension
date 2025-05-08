@@ -36,10 +36,14 @@ const authorNameStyles = {
     fontWeight: 'normal',
     fontSize: '11px',
     color: '#ccc',
-    whiteSpace: 'nowrap',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
-    maxWidth: '100px', // Limit author name width
+    maxWidth: '150px', // Increased from 100px
+    wordBreak: 'break-all', // Allow breaking at any character
+    display: '-webkit-box',
+    WebkitLineClamp: 2, // Allow up to 2 lines
+    WebkitBoxOrient: 'vertical',
+    lineHeight: '1.2',
 };
 
 const contentStyles = {
@@ -76,6 +80,7 @@ const titleStyles = {
     textOverflow: 'ellipsis',
     lineHeight: '1.4',
     maxHeight: 'calc(1.4em * 2)', // Corresponds to WebkitLineClamp * lineHeight
+    paddingRight: '12px', // Add padding to prevent overlap with close button
 };
 
 const metadataContainerStyles = {
@@ -87,11 +92,12 @@ const metadataContainerStyles = {
 
 const metadataLineStyles = {
     display: 'flex',
-    alignItems: 'center',
+    alignItems: 'flex-start', // Changed from center to allow proper wrapping
     gap: '6px',
-    flexWrap: 'wrap', // Allow wrapping if needed, though aiming for compact
+    flexWrap: 'wrap', // Allow wrapping if needed
     fontSize: '11px',
     color: '#aaa',
+    lineHeight: '1.2',
 };
 
 const metadataSeparator = {
@@ -115,16 +121,29 @@ const buttonStyles = {
 
 const closeButtonStyles = {
     position: 'absolute',
-    top: '8px',
-    right: '10px',
+    top: '6px',
+    right: '8px',
     background: 'transparent',
     border: 'none',
     color: '#aaa',
     fontSize: '20px',
     cursor: 'pointer',
-    padding: '0',
+    padding: '4px',
     lineHeight: '1',
-    zIndex: 1, // Above other elements in the popup
+    zIndex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '24px',
+    height: '24px',
+    borderRadius: '50%',
+    transition: 'background-color 0.2s ease, color 0.2s ease',
+    backgroundColor: 'transparent', // Explicitly set the default background
+};
+
+const closeButtonHoverStyles = {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    color: '#fff',
 };
 
 // --- Toggle Switch Styles --- (New)
@@ -219,6 +238,29 @@ function formatDate(timestamp) {
 
 const DanmakuMatchPopup = ({ matchData, onShowDanmaku, onClosePopup, initialOverlayActive }) => {
     const [isActive, setIsActive] = useState(initialOverlayActive);
+    const [isFullscreen, setIsFullscreen] = useState(false);
+    const [isCloseHovered, setIsCloseHovered] = useState(false);
+
+    useEffect(() => {
+        const handleFullscreenChange = () => {
+            setIsFullscreen(document.fullscreenElement !== null);
+        };
+
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+        document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+        document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+        document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+
+        // Initial check
+        setIsFullscreen(document.fullscreenElement !== null);
+
+        return () => {
+            document.removeEventListener('fullscreenchange', handleFullscreenChange);
+            document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+            document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+            document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+        };
+    }, []);
 
     // Update local state if prop changes (e.g., on video navigation reset)
     useEffect(() => {
@@ -229,16 +271,17 @@ const DanmakuMatchPopup = ({ matchData, onShowDanmaku, onClosePopup, initialOver
         }
     }, [initialOverlayActive]);
 
-    if (!matchData) return null;
+    if (!matchData || isFullscreen) return null;
 
     const handleToggle = (e) => {
         e.stopPropagation(); // Prevent potential interference
+        e.preventDefault(); // Prevent default browser action for label/input click
         const newState = !isActive;
-        console.log(`🍥 Popup handleToggle: Called. Current isActive: ${isActive}, Setting internal state to: ${newState}`);
+        // console.log(`🍥 Popup handleToggle: Called. Current isActive: ${isActive}, Setting internal state to: ${newState}`);
         setIsActive(newState);
         if (onShowDanmaku) {
             // Pass the new state and necessary ID
-            console.log(`🍥 Popup handleToggle: Calling parent onShowDanmaku with state: ${newState}`);
+            // console.log(`🍥 Popup handleToggle: Calling parent onShowDanmaku with state: ${newState}`);
             onShowDanmaku(newState, matchData.cid || matchData.aid);
         }
     };
@@ -259,7 +302,15 @@ const DanmakuMatchPopup = ({ matchData, onShowDanmaku, onClosePopup, initialOver
 
     return (
         <div style={popupStyles}>
-            <button style={closeButtonStyles} onClick={handleClose} title="Close Popup">&times;</button>
+            <button
+                style={{ ...closeButtonStyles, ...(isCloseHovered ? closeButtonHoverStyles : {}) }}
+                onClick={handleClose}
+                onMouseEnter={() => setIsCloseHovered(true)}
+                onMouseLeave={() => setIsCloseHovered(false)}
+                title="Close Popup"
+            >
+                &times;
+            </button>
 
             <div style={contentStyles}>
                 {videoThumbnail && <img src={videoThumbnail} alt="Video thumbnail" style={thumbnailStyles} referrerPolicy="no-referrer" />}
