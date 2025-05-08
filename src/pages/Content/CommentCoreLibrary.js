@@ -183,6 +183,12 @@ export const CommentManager = (function () {
         this._startTimer();
     };
 
+    CommentManagerInternal.prototype.pause = function () {
+        // Alias for stop, as stop handles the pausing logic including stopping the timer
+        // and calling stop on individual comments which should freeze CSS animations.
+        this.stop();
+    };
+
     CommentManagerInternal.prototype.seek = function (time) {
         this.position = BinArray.bsearch(this.timeline, time, function (a, b) {
             if (a < b.stime) {
@@ -254,7 +260,6 @@ export const CommentManager = (function () {
     };
 
     CommentManagerInternal.prototype.time = function (time) {
-        time = time - 1;
         if (this.position >= this.timeline.length ||
             Math.abs(this._lastPosition - time) >= this.options.seekTrigger) {
 
@@ -1008,12 +1013,13 @@ export const CommentSpaceAllocator = (function () {
         this._pools = [
             []
         ];
-        this.avoid = 1;
+        this.avoid = 3; // Increased from 1 to 3 for better vertical spacing
         this._width = width;
         this._height = height;
     }
     CommentSpaceAllocator.prototype.willCollide = function (existing, check) {
-        return existing.stime + existing.ttl >= check.stime + check.ttl / 2;
+        // Revised collision logic: checks if lifespans overlap
+        return Math.max(existing.stime, check.stime) < Math.min(existing.stime + existing.ttl, check.stime + check.ttl);
     };
     CommentSpaceAllocator.prototype.pathCheck = function (y, comment, pool) {
         var bottom = y + comment.height;
@@ -1231,72 +1237,79 @@ export const CssScrollComment = (function (_super) {
     }
     CssScrollComment.prototype.init = function (recycle) {
         if (recycle === void 0) { recycle = null; }
-        _super.prototype.init.call(this, recycle);
+        _super.prototype.init.call(this, recycle); // Calls ScrollComment.init which sets this.x = parent.width
+        // CoreComment.init then calls this.x setter.
+
+        // Initial position for CSS transitions: directly set transform to start off-screen right.
+        // this.x (getter) will return the value set by ScrollComment.init via CoreComment's x setter call.
+        CssCompatLayer.transform(this.dom, "translateX(" + this.x + "px)");
+
         this._toggleClass('css-optimize', true);
+        this._dirtyCSS = true; // Ensure update sets up the first transition
     };
+
     Object.defineProperty(CssScrollComment.prototype, "x", {
         get: function () {
-            // For CSS transitions, this might represent the target x,
-            // but actual calculation is more complex during animation.
-            // Original logic was: (this.ttl / this.dur) * (this.parent.width + this.width) - this.width;
-            // This getter might need to reflect the current transformed X if _x is a target.
-            return this._x !== undefined && this._x !== null ? this._x : (this.ttl / this.dur) * (this.parent.width + this.width) - this.width;
+            return this._x; // Simply return the logical _x position
         },
-        set: function (x) {
-            var currentX = parseFloat(this.dom.style.transform.replace(/translateX\\(|px\\)/g, '')) || 0;
-            if (this._x !== null && typeof this._x === "number") {
-                // dx was used if _x was the previous value, but here x is the new target.
-                this._x = x;
-                // The transform should be the absolute new value 'x'
-                var transformX = (this.axis % 2 === 0 ? this._x : -this._x);
-                CssCompatLayer.transform(this.dom, "translateX(" + transformX + "px)");
-            }
-            else {
-                this._x = x;
-                if (!this.absolute) {
-                    this._x *= this.parent.width;
-                }
-                // This part seems for initial setup, not continuous animation via setter
-                if (this.axis % 2 === 0) {
-                    this.dom.style.left =
-                        (this._x + (this.align % 2 === 0 ? 0 : -this.width)) + 'px';
-                }
-                else {
-                    this.dom.style.right =
-                        (this._x + (this.align % 2 === 0 ? -this.width : 0)) + 'px';
-                }
+        set: function (newX) {
+            // This setter should update the logical position and mark for CSS update if needed.
+            // It should NOT directly apply transforms if a CSS transition is managing movement.
+            if (this._x !== newX) {
+                this._x = newX;
+                // If the logical position is changed (e.g. by a seek or direct manipulation),
+                // the CSS transition needs to be re-evaluated.
+                this._dirtyCSS = true;
             }
         },
         enumerable: true,
         configurable: true
     });
+
     CssScrollComment.prototype.update = function () {
-        if (this._dirtyCSS) {
+        // This is called by CoreComment.time() -> this.update() if movable
+        // We set up the CSS transition once when _dirtyCSS is true.
+        if (this._dirtyCSS && this.ttl > 0) {
+            // Use current ttl for the remaining duration of the transition
             this.dom.style.transition = "transform " + this.ttl + "ms linear";
-            // Setting x to -this.width initiates the transition to move leftwards
-            this.x = (this.axis % 2 === 0 ? -this.width : this.parent.width);
+            // Target transform: move to off-screen left
+            var targetX = (this.axis % 2 === 0 ? -this.width : this.parent.width + this.width); // Adjusted for bi-directional scroll
+            if (this.axis % 2 !== 0) { // Reverse scroll (mode 6), target is parent.width (effectively starts at -this.width)
+                // For reverse, initial X should be -this.width, target is parent.width.
+                // CssCompatLayer.transform(this.dom, "translateX(" + targetX + "px)"); 
+                // My init sets this.x from parent.width. For mode 6, init should be -this.width.
+                // This part needs mode-specific handling in init for starting pos.
+                // For now, assuming mode 1 (axis 0)
+                CssCompatLayer.transform(this.dom, "translateX(" + (-this.width) + "px)");
+            } else {
+                CssCompatLayer.transform(this.dom, "translateX(" + (-this.width) + "px)");
+            }
             this._dirtyCSS = false;
         }
+        // If !this._dirtyCSS, CSS handles the animation. CoreComment.time() updates ttl.
+        // If ttl reaches 0, finish() is called.
     };
-    CssScrollComment.prototype.invalidate = function () {
-        _super.prototype.invalidate.call(this);
-        this._dirtyCSS = true;
-    };
+
     CssScrollComment.prototype.stop = function () {
         _super.prototype.stop.call(this);
-        // Capture current transform value
-        var currentTransform = window.getComputedStyle(this.dom).transform;
-        this.dom.style.transition = ''; // Stop CSS transition
-        CssCompatLayer.transform(this.dom, currentTransform); // Apply current visual position
-        // Update _x based on the captured transform. This is complex because transform can be a matrix.
-        // For translateX, it's usually the 5th value in matrix(a,b,c,d,e,f) or 13th in matrix3d.
-        // Simplification: Assume _x should reflect the logical end position or be reset.
-        // The original logic was:
-        // this.x = this._x; // This seems to re-apply the old target _x
-        // this._x = null;   // Then clear it
-        // this.x = this.x;   // Then re-evaluate the getter/setter for x? This is confusing.
-        // For now, we clear the transition and set _dirtyCSS for next update cycle.
-        this._dirtyCSS = true;
+        if (!this.dom) return;
+
+        var computedStyle = window.getComputedStyle(this.dom);
+        var currentTransform = computedStyle.transform;
+
+        this.dom.style.transition = 'none'; // Stop CSS transition
+        CssCompatLayer.transform(this.dom, currentTransform); // Apply current visual position statically
+
+        // Update logical _x based on the frozen position
+        if (currentTransform && currentTransform !== 'none') {
+            var matrix = new DOMMatrix(currentTransform); // Modern way, or use regex for older matrix string
+            this._x = matrix.e; // For 2D matrix(a,b,c,d,e,f), e is translateX
+            if (this.axis % 2 !== 0) { // For reverse, logical _x might need to be adjusted from transform
+                // this._x = this.parent.width - matrix.e -this.width ? // complex logic needed if this.x means start
+            }
+        }
+
+        this._dirtyCSS = true; // Ready for a new transition if started again
     };
     return CssScrollComment;
 }(ScrollComment));

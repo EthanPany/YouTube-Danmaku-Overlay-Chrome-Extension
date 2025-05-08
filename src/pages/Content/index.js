@@ -208,11 +208,22 @@ function setupDanmakuOverlay(dList) {
         commentManager.clear();
         commentManager.load(dList.map(c => ({
             text: c.text,
-            mode: c.mode === 1 ? 1 : 1,
-            stime: c.time * 1000,
+            mode: c.mode,
+            stime: c.stime,
+            dur: c.dur,
             color: c.color || 0xffffff,
             size: c.size || 25,
-            border: false
+            font: c.font || '',
+            shadow: c.shadow !== undefined ? c.shadow : true,
+            border: c.border || false,
+            x: c.x,
+            y: c.y,
+            rZ: c.rZ,
+            rY: c.rY,
+            motion: c.motion,
+            opacity: c.opacity,
+            alpha: c.alpha,
+            position: c.position
         })));
         commentManager.start();
         synchronizeDanmakuWithVideo();
@@ -236,14 +247,14 @@ function synchronizeDanmakuWithVideo() {
     // Proper handler management is crucial for a robust solution.
 
     const onPlay = () => commentManager.start();
-    const onPause = () => commentManager.pause();
+    const onPause = () => commentManager.stop();
     const onSeeked = () => commentManager.time(video.currentTime * 1000);
     const onTimeUpdate = () => {
         if (video.currentTime && commentManager) { // Check if CM exists
             commentManager.time(video.currentTime * 1000);
         }
     };
-    const onSeeking = () => commentManager.pause(); // Pause during seek
+    const onSeeking = () => commentManager.stop();
 
 
     // A more robust way to handle listeners:

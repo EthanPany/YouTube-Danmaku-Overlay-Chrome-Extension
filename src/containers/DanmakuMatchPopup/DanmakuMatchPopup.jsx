@@ -233,6 +233,7 @@ const DanmakuMatchPopup = ({ matchData, onShowDanmaku, onClosePopup, initialOver
 
     const handleToggle = (e) => {
         e.stopPropagation(); // Prevent potential interference
+        e.preventDefault(); // Prevent default browser action for label/input click
         const newState = !isActive;
         // console.log(`🍥 Popup handleToggle: Called. Current isActive: ${isActive}, Setting internal state to: ${newState}`);
         setIsActive(newState);
