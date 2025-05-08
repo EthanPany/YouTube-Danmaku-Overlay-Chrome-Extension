@@ -80,10 +80,6 @@ var options = {
         test: new RegExp('.(' + fileExtensions.join('|') + ')$'),
         type: 'asset/resource',
         exclude: /node_modules/,
-        // loader: 'file-loader',
-        // options: {
-        //   name: '[name].[ext]',
-        // },
       },
       {
         test: /\.html$/,
@@ -123,25 +119,12 @@ var options = {
           },
         ],
         exclude: /node_modules/,
-      },
-      {
-        test: /node_modules\/comment-core-library\/.*\.js$/,
-        use: [
-          {
-            loader: 'babel-loader',
-            options: {
-              presets: ['@babel/preset-env'],
-              plugins: ['@babel/plugin-transform-modules-commonjs']
-            }
-          }
-        ]
-      },
+      }
     ],
   },
   resolve: {
     alias: {
-      ...alias,
-      'comment-core-library': path.resolve(__dirname, 'node_modules/comment-core-library/dist/CommentCoreLibrary.js')
+      ...alias
     },
     extensions: fileExtensions
       .map((extension) => '.' + extension)
@@ -151,7 +134,6 @@ var options = {
     isDevelopment && new ReactRefreshWebpackPlugin(),
     new CleanWebpackPlugin({ verbose: false }),
     new webpack.ProgressPlugin(),
-    // expose and write the allowed env vars on the compiled bundle
     new webpack.EnvironmentPlugin(['NODE_ENV']),
     new CopyWebpackPlugin({
       patterns: [
@@ -160,7 +142,6 @@ var options = {
           to: path.join(__dirname, 'build'),
           force: true,
           transform: function (content, path) {
-            // generates the manifest file using the package.json informations
             return Buffer.from(
               JSON.stringify({
                 description: process.env.npm_package_description,
@@ -199,25 +180,6 @@ var options = {
         },
       ],
     }),
-    new CopyWebpackPlugin({
-      patterns: [
-        {
-          from: 'node_modules/comment-core-library/dist/CommentCoreLibrary.js',
-          to: path.join(__dirname, 'build', 'comment-core-library.js'),
-          force: true,
-        },
-        {
-          from: 'src/pages/Content/ccl-setup.js',
-          to: path.join(__dirname, 'build', 'ccl-setup.js'),
-          force: true,
-        },
-        {
-          from: 'src/pages/Content/danmaku-operations.js',
-          to: path.join(__dirname, 'build', 'danmaku-operations.js'),
-          force: true,
-        }
-      ],
-    }),
     new HtmlWebpackPlugin({
       template: path.join(__dirname, 'src', 'pages', 'Newtab', 'index.html'),
       filename: 'newtab.html',
@@ -247,7 +209,7 @@ var options = {
       filename: 'panel.html',
       chunks: ['panel'],
       cache: false,
-    }),
+    })
   ].filter(Boolean),
   infrastructureLogging: {
     level: 'info',

@@ -6,49 +6,20 @@ import { findBestMatch } from './modules/match';
 import DanmakuMatchPopup from '../../containers/DanmakuMatchPopup/DanmakuMatchPopup';
 import { CommentManager } from './CommentCoreLibrary';
 
-// Create a script element to load CommentCoreLibrary
-const script = document.createElement('script');
-script.src = chrome.runtime.getURL('comment-core-library.js');
-script.onload = function () {
-    console.log('🍥 CommentCoreLibrary loaded, loading setup script');
-
-    // Load the setup script
-    const setupScript = document.createElement('script');
-    setupScript.src = chrome.runtime.getURL('ccl-setup.js');
-    setupScript.onload = function () {
-        // Load the operations script
-        const opsScript = document.createElement('script');
-        opsScript.src = chrome.runtime.getURL('danmaku-operations.js');
-        document.head.appendChild(opsScript);
-    };
-    document.head.appendChild(setupScript);
-};
-
-// Listen for CCL setup completion
-document.addEventListener('CCL_READY', function (event) {
-    if (event.detail.success) {
-        console.log('🍥 CommentManager setup completed successfully');
-    } else {
-        console.error('🍥 CommentManager setup failed:', event.detail.error);
-    }
-});
-
-document.head.appendChild(script);
-
 console.log('🍥 YouTube Danmaku Overlay Content Script Loaded 🍥');
 
 const EXTENSION_ROOT_ID = 'youtube-danmaku-overlay-root';
 const BILIBILI_POPUP_ID = 'bili-danmaku-popup-container';
 const DANMAKU_OVERLAY_ID = 'bili-danmaku-overlay-container';
-const STORAGE_KEY_PREFIX = 'youtubeDanmakuToggleState_'; // Prefix for storing state per video
+const STORAGE_KEY_PREFIX = 'youtubeDanmakuToggleState_';
 
 let reactRoot = null;
 let currentVideoId = null;
 let matchedBiliData = null;
 let isPopupVisible = false;
 let commentManager = null;
-let danmakuList = []; // Store for fetched danmaku
-let currentOverlayState = false; // Keep track of the state we *think* should be active based on storage
+let danmakuList = [];
+let currentOverlayState = false;
 
 function getStorageKey() {
     return currentVideoId ? `${STORAGE_KEY_PREFIX}${currentVideoId}` : null;
