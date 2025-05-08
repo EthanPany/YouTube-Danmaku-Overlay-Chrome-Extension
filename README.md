@@ -103,9 +103,11 @@ Follow these steps to get the extension running on your local machine for develo
 
 1.  **Clone the Repository:**
     ```bash
-    git clone https://github.com/<your-github-username>/YouTube-Danmaku-Overlay-Chrome-Extension.git # Replace with actual repo URL
+    git clone https://github.com/EthanPany/YouTube-Danmaku-Overlay-Chrome-Extension.git
     cd YouTube-Danmaku-Overlay-Chrome-Extension
     ```
+
+    
 
 2.  **Install Dependencies:**
     Navigate to the project directory in your terminal and run:
