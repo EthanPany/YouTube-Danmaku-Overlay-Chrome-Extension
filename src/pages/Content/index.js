@@ -75,10 +75,10 @@ function cleanupUI(fullReset = true) {
     }
 }
 
-function setupDanmakuOverlay(comments) {
+function setupDanmakuOverlay(dList) {
     const videoElement = document.querySelector('video');
     if (!videoElement) {
-        debugError('Video element not found');
+        debugLog('Video element not found');
         return;
     }
 
@@ -108,39 +108,84 @@ function setupDanmakuOverlay(comments) {
     }
 
     // Convert Bilibili comments to Danmaku format
-    const danmakuComments = comments.map(comment => ({
-        text: comment.text,
-        mode: 'rtl', // right-to-left scrolling
-        time: typeof comment.time === 'number' ? comment.time : comment.stime,
-        style: {
-            fontSize: `${comment.size || Math.floor(videoElement.offsetHeight / 25)}px`,
-            color: comment.color ? `#${comment.color.toString(16).padStart(6, '0')}` : '#fff',
-            textShadow: '-1px -1px #000, -1px 1px #000, 1px -1px #000, 1px 1px #000'
-        }
-    }));
+    const comments = dList.map(comment => {
+        // Calculate font size based on video height
+        // Default to 5% of video height if no size specified
+        const defaultFontSize = Math.max(24, Math.floor(videoElement.offsetHeight * 0.05));
+        const fontSize = comment.size ? comment.size : defaultFontSize;
+
+        return {
+            text: comment.text,
+            mode: 'rtl', // right-to-left scrolling
+            time: typeof comment.time === 'number' ? comment.time : comment.stime,
+            style: {
+                fontSize: `${fontSize}px`,
+                color: '#ffffff',
+                textShadow: '-1px -1px #000, -1px 1px #000, 1px -1px #000, 1px 1px #000',
+                font: `bold ${fontSize}px "Microsoft YaHei", "PingFang SC", "Helvetica Neue", Arial, sans-serif`,
+                fillStyle: '#ffffff',
+                strokeStyle: '#000000',
+                lineWidth: 2
+            }
+        };
+    });
 
     try {
+        if (danmakuInstance) {
+            danmakuInstance.destroy();
+        }
+
         // Initialize Danmaku with video element
         danmakuInstance = new Danmaku({
             container: container,
             media: videoElement,
-            comments: danmakuComments,
+            comments: comments,
             engine: 'canvas', // Use canvas for better performance
-            speed: 144 // Default speed
+            speed: 48, // Even slower speed (1/3 of default)
+            opacity: 1,
+            defaultFontSize: Math.max(24, Math.floor(videoElement.offsetHeight * 0.05))
         });
 
         // Handle video events
-        videoElement.addEventListener('play', () => danmakuInstance.show());
-        videoElement.addEventListener('pause', () => danmakuInstance.hide());
-        videoElement.addEventListener('seeking', () => danmakuInstance.clear());
+        videoElement.addEventListener('play', () => {
+            if (danmakuInstance) {
+                danmakuInstance.show();
+            }
+        });
+
+        videoElement.addEventListener('pause', () => {
+            if (danmakuInstance) {
+                // Don't hide or pause, let comments stay visible when paused
+                danmakuInstance.show();
+            }
+        });
+
+        videoElement.addEventListener('seeking', () => {
+            if (danmakuInstance) {
+                danmakuInstance.clear();
+                // Show again after seeking if video is playing
+                if (!videoElement.paused) {
+                    danmakuInstance.show();
+                }
+            }
+        });
 
         // Handle resize
         const resizeObserver = new ResizeObserver(() => {
-            if (danmakuInstance) danmakuInstance.resize();
+            if (danmakuInstance) {
+                danmakuInstance.resize();
+                // Update font size on resize
+                const newDefaultSize = Math.max(24, Math.floor(videoElement.offsetHeight * 0.05));
+                danmakuInstance.options.defaultFontSize = newDefaultSize;
+            }
         });
         resizeObserver.observe(videoElement);
 
-        debugLog('Danmaku initialized with', danmakuComments.length, 'comments');
+        debugLog('Danmaku initialized with', comments.length, 'comments');
+
+        // Show immediately regardless of video state
+        danmakuInstance.show();
+
     } catch (error) {
         debugError('Error initializing Danmaku:', error);
         cleanupDanmakuOverlay();
