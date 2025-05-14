@@ -35,6 +35,8 @@ const baseStyles = {
         display: 'flex',
         gap: '10px',
         alignItems: 'flex-start',
+        margin: 0,
+        padding: 0
     },
     thumbnailStyles: {
         width: '110px',
@@ -72,7 +74,8 @@ const baseStyles = {
         display: 'flex',
         alignItems: 'center',
         gap: '8px',
-        padding: '8px',
+        padding: 0,
+        margin: 0,
         borderRadius: '6px',
         width: '100%',
         boxSizing: 'border-box'
@@ -91,6 +94,7 @@ const baseStyles = {
         justifyContent: 'center',
         transition: 'all 0.2s ease',
         padding: 0,
+        margin: 0
     },
     settingsButtonHoverStyles: {
         backgroundColor: '#555',
@@ -98,11 +102,12 @@ const baseStyles = {
     },
     settingsButtonContainer: {
         backgroundColor: '#383838',
-        padding: '8px',
+        padding: '4px',
         borderRadius: '6px',
         display: 'flex',
         alignItems: 'center',
-        height: '36px',
+        height: '30px',
+        margin: 0
     },
     toggleContainer: {
         display: 'flex',
@@ -110,10 +115,11 @@ const baseStyles = {
         justifyContent: 'space-between',
         backgroundColor: '#383838',
         borderRadius: '6px',
-        padding: '8px',
+        padding: '4px 8px',
         cursor: 'pointer',
         flexGrow: 1,
-        height: '36px',
+        height: '30px',
+        margin: 0
     }
 };
 
@@ -259,7 +265,7 @@ const DanmakuMatchPopup = ({ matchData, onShowDanmaku, onClosePopup, initialOver
             right: '20px',
             backgroundColor: '#282828',
             color: '#e0e0e0',
-            padding: '12px',
+            padding: '12px 12px 8px 12px',
             borderRadius: '8px',
             zIndex: '2147483647',
             boxShadow: '0 5px 15px rgba(0,0,0,0.3)',
@@ -272,17 +278,20 @@ const DanmakuMatchPopup = ({ matchData, onShowDanmaku, onClosePopup, initialOver
             width: '340px',
             transition: 'all 0.3s ease-in-out',
             maxHeight: showSettings ? '600px' : '200px',
-            overflow: 'hidden'
+            overflow: 'hidden',
+            margin: 0
         },
         settingsPanel: {
             backgroundColor: '#383838',
             borderRadius: '6px',
-            marginTop: '8px',
+            marginTop: '4px',
             overflow: 'hidden',
             transition: 'all 0.3s ease-in-out',
             opacity: showSettings ? 1 : 0,
             maxHeight: showSettings ? '500px' : '0',
-            transform: showSettings ? 'translateY(0)' : 'translateY(-10px)'
+            transform: showSettings ? 'translateY(0)' : 'translateY(-10px)',
+            margin: 0,
+            padding: 0
         }
     };
 

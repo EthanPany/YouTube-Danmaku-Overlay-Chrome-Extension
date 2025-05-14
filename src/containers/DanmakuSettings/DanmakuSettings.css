@@ -179,7 +179,7 @@
 }
 
 .danmaku-settings {
-    padding: 8px;
+    padding: 0px;
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -201,6 +201,7 @@
 .settings-group {
     background-color: #383838;
     padding: 8px;
+    /* height: 50%; */
     border-radius: 6px;
     transition: background-color 0.2s ease;
 }
