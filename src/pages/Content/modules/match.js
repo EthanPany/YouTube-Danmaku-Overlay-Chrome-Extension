@@ -28,7 +28,7 @@ function parseBiliDuration(durationStr) {
  * @param {number} durationToleranceSeconds - Allowed difference in duration (seconds).
  * @returns {object|null} The best matching Bilibili video object, or null if no good match.
  */
-export function findBestMatch(youtubeData, bilibiliResults, titleSimilarityThreshold = 0.7, durationToleranceSeconds = 10) {
+export function findBestMatch(youtubeData, bilibiliResults, titleSimilarityThreshold = 0.3, durationToleranceSeconds = 300) {
     if (!youtubeData || !youtubeData.title || typeof youtubeData.duration !== 'number' || !bilibiliResults || bilibiliResults.length === 0) {
         console.warn('🍥 Invalid input for findBestMatch');
         return null;
@@ -37,41 +37,67 @@ export function findBestMatch(youtubeData, bilibiliResults, titleSimilarityThres
     let bestMatch = null;
     let highestScore = -1;
 
+    // Clean and normalize YouTube title
+    const ytTitle = youtubeData.title.toLowerCase()
+        .replace(/[^\w\s\u4e00-\u9fff]/g, '') // Keep only words, spaces, and Chinese characters
+        .trim();
+
     for (const biliVideo of bilibiliResults) {
         if (!biliVideo || !biliVideo.title || !biliVideo.duration) continue;
 
-        // 1. Compare titles
-        const titleSimilarity = compareTwoStrings(youtubeData.title.toLowerCase(), biliVideo.title.toLowerCase());
+        // Clean and normalize Bilibili title
+        const biliTitle = biliVideo.title.toLowerCase()
+            .replace(/[^\w\s\u4e00-\u9fff]/g, '')
+            .trim();
 
-        // 2. Compare durations
+        // 1. Compare titles with improved similarity calculation
+        const titleSimilarity = compareTwoStrings(ytTitle, biliTitle);
+
+        // 2. Compare durations with more flexible tolerance
         const biliDurationSeconds = parseBiliDuration(biliVideo.duration);
         let durationDifference = Infinity;
+        let durationScoreFactor = 0;
+
         if (biliDurationSeconds !== null) {
             durationDifference = Math.abs(youtubeData.duration - biliDurationSeconds);
+
+            // More lenient duration scoring
+            if (durationDifference <= durationToleranceSeconds) {
+                // Linear score from 1.0 (perfect match) to 0.0 (at tolerance limit)
+                durationScoreFactor = 1 - (durationDifference / durationToleranceSeconds);
+            } else {
+                // Allow matches beyond tolerance with reduced score
+                durationScoreFactor = Math.max(0, 0.5 - (durationDifference - durationToleranceSeconds) / (durationToleranceSeconds * 2));
+            }
         }
 
-        //console.log(`🍥 Comparing with Bili: "${biliVideo.title}"`,
-        //    `YT Duration: ${youtubeData.duration.toFixed(2)}s, Bili Duration: ${biliDurationSeconds === null ? 'N/A' : biliDurationSeconds + 's'}`,
-        //    `Title Sim: ${titleSimilarity.toFixed(2)}, Duration Diff: ${durationDifference === Infinity ? 'N/A' : durationDifference.toFixed(2) + 's'}`);
+        // Debug logging for matching process
+        console.log(`🍥 Matching "${biliVideo.title}"`,
+            `\n   Title Similarity: ${(titleSimilarity * 100).toFixed(1)}%`,
+            `\n   Duration Diff: ${durationDifference === Infinity ? 'N/A' : durationDifference.toFixed(1) + 's'}`,
+            `\n   Duration Score: ${(durationScoreFactor * 100).toFixed(1)}%`);
 
-        // 3. Apply thresholds and find best score
-        // Simple scoring: prioritize title similarity, then duration. Can be improved.
-        if (titleSimilarity >= titleSimilarityThreshold && durationDifference <= durationToleranceSeconds) {
-            // Consider this a potential match
-            // For now, let's use a combined score, giving more weight to title similarity
-            const durationScoreFactor = Math.max(0, 1 - (durationDifference / durationToleranceSeconds)); // Clamped at 0
-            const currentScore = titleSimilarity * 0.8 + durationScoreFactor * 0.2;
+        // 3. Calculate combined score with weighted factors
+        if (titleSimilarity >= titleSimilarityThreshold) {
+            // Title similarity is weighted more heavily (70%) than duration (30%)
+            const currentScore = (titleSimilarity * 0.7) + (durationScoreFactor * 0.3);
+
             if (currentScore > highestScore) {
                 highestScore = currentScore;
                 bestMatch = biliVideo;
+                console.log(`🍥 New best match! Score: ${(currentScore * 100).toFixed(1)}%`);
             }
         }
     }
 
     if (bestMatch) {
-        //console.log('🍥 Best match found:', bestMatch, `Score: ${highestScore.toFixed(2)}`);
+        console.log('🍥 Best match found:',
+            `\n   Title: "${bestMatch.title}"`,
+            `\n   Final Score: ${(highestScore * 100).toFixed(1)}%`);
     } else {
-        console.log('🍥 No suitable match found based on current thresholds.');
+        console.log('🍥 No suitable match found. Consider adjusting thresholds:',
+            `\n   Title Threshold: ${(titleSimilarityThreshold * 100).toFixed(1)}%`,
+            `\n   Duration Tolerance: ${durationToleranceSeconds}s`);
     }
 
     return bestMatch;

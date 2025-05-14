@@ -182,15 +182,6 @@ var options = {
         },
       ],
     }),
-    new CopyWebpackPlugin({
-      patterns: [
-        {
-          from: 'vendor/CommentCoreLibrary.min.js',
-          to: path.join(__dirname, 'build', 'vendor'),
-          force: true,
-        }
-      ],
-    }),
     new HtmlWebpackPlugin({
       template: path.join(__dirname, 'src', 'pages', 'Newtab', 'index.html'),
       filename: 'newtab.html',

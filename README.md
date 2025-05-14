@@ -160,3 +160,9 @@ Contributions and ideas are welcome!
 ## 📄 License
 
 This project is licensed under the terms specified in the [LICENSE](./LICENSE) file. Please check the file for full details. (Likely MIT, but confirm with the `LICENSE` file).
+
+## Acknowledgements
+
+This project was bootstrapped with [Chrome Extension Boilerplate with React](https://github.com/lxieyang/chrome-extension-boilerplate-react).
+
+Danmaku (flying comments) functionality is powered by the [`weizhenye/Danmaku`](https://github.com/weizhenye/Danmaku) library. We are grateful for this excellent open-source project.
