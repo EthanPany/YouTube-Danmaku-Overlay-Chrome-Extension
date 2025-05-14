@@ -1,0 +1,259 @@
+.danmaku-settings-container {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    z-index: 2001;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+.settings-toggle-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.7);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    cursor: pointer;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    padding: 0;
+}
+
+.settings-toggle-btn:hover {
+    background: rgba(0, 0, 0, 0.8);
+    border-color: rgba(255, 255, 255, 0.5);
+    transform: scale(1.05);
+}
+
+.settings-panel {
+    position: absolute;
+    bottom: 50px;
+    left: 0;
+    width: 300px;
+    background: rgba(0, 0, 0, 0.85);
+    border-radius: 8px;
+    padding: 15px;
+    color: white;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.settings-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.settings-header h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 500;
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 20px;
+    cursor: pointer;
+    padding: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.2s ease;
+}
+
+.close-btn:hover {
+    color: white;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.settings-content {
+    padding: 15px;
+}
+
+.setting-item {
+    margin-bottom: 15px;
+}
+
+.setting-item:last-child {
+    margin-bottom: 0;
+}
+
+.setting-item label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 13px;
+    color: #e0e0e0;
+    font-weight: 500;
+}
+
+.setting-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.setting-controls input[type="range"] {
+    flex: 1;
+    height: 4px;
+    -webkit-appearance: none;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+    outline: none;
+}
+
+.setting-controls input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    background: white;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.setting-controls input[type="range"]::-webkit-slider-thumb:hover {
+    transform: scale(1.1);
+}
+
+.setting-controls span {
+    min-width: 45px;
+    text-align: right;
+    font-size: 13px;
+    color: #aaa;
+}
+
+.setting-controls select {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    outline: none;
+    font-size: 13px;
+}
+
+.setting-controls select:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.setting-controls input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: #3498db;
+}
+
+.settings-error {
+    background-color: rgba(255, 0, 0, 0.1);
+    color: #ff4444;
+    padding: 8px 12px;
+    margin: 0 15px 15px;
+    border-radius: 4px;
+    font-size: 12px;
+    text-align: center;
+}
+
+.danmaku-settings {
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    animation: slideDown 0.3s ease-in-out;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.settings-group {
+    background-color: #383838;
+    padding: 8px;
+    border-radius: 6px;
+    transition: background-color 0.2s ease;
+}
+
+.settings-group:hover {
+    background-color: #404040;
+}
+
+.settings-group label {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    color: #e0e0e0;
+    font-size: 13px;
+}
+
+.settings-group .checkbox-label {
+    flex-direction: row;
+    align-items: center;
+    cursor: pointer;
+}
+
+.settings-group input[type="range"] {
+    width: 100%;
+    height: 4px;
+    background: #666;
+    border-radius: 2px;
+    outline: none;
+    -webkit-appearance: none;
+    margin: 8px 0;
+}
+
+.settings-group input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 12px;
+    height: 12px;
+    background: #fff;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.settings-group input[type="range"]::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+}
+
+.settings-group input[type="checkbox"] {
+    margin-right: 8px;
+    cursor: pointer;
+}
+
+.settings-group .value {
+    color: #aaa;
+    font-size: 12px;
+    margin-left: auto;
+}

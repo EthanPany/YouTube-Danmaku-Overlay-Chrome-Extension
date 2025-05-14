@@ -1,64 +1,120 @@
 import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
+import DanmakuSettings from '../DanmakuSettings/DanmakuSettings';
 
-// Basic styling, can be moved to a separate CSS file or enhanced with styled-components
-const popupStyles = {
-    position: 'fixed', // Changed to fixed to avoid being clipped by player parent
-    bottom: '20px',
-    right: '20px',
-    width: '340px', // Increased width
-    backgroundColor: '#282828', // Reverted color
-    color: '#e0e0e0',
-    padding: '12px',
-    borderRadius: '8px',
-    zIndex: '2147483647',
-    boxShadow: '0 5px 15px rgba(0,0,0,0.3)',
-    fontFamily: 'Roboto, Arial, "Noto Sans SC", sans-serif',
-    fontSize: '13px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '10px',
-    border: '1px solid #444',
-    pointerEvents: 'auto', // DEBUG: Ensure pointer events are enabled
-    // Removed backdropFilter and RGBA background
-};
+// Add Font Awesome CSS
+const fontAwesomeLink = document.createElement('link');
+fontAwesomeLink.rel = 'stylesheet';
+fontAwesomeLink.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css';
+document.head.appendChild(fontAwesomeLink);
 
-const authorImageStyles = {
-    width: '18px', // Smaller author pic
-    height: '18px',
-    borderRadius: '50%',
-    border: '1px solid #666',
-    objectFit: 'cover',
-    marginRight: '2px',
-};
-
-const authorNameStyles = {
-    fontWeight: 'normal',
-    fontSize: '11px',
-    color: '#ccc',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    maxWidth: '150px', // Increased from 100px
-    wordBreak: 'break-all', // Allow breaking at any character
-    display: '-webkit-box',
-    WebkitLineClamp: 2, // Allow up to 2 lines
-    WebkitBoxOrient: 'vertical',
-    lineHeight: '1.2',
-};
-
-const contentStyles = {
-    display: 'flex',
-    gap: '10px',
-    alignItems: 'flex-start',
-};
-
-const thumbnailStyles = {
-    width: '110px', // Slightly larger thumbnail
-    aspectRatio: '16 / 9',
-    objectFit: 'cover',
-    borderRadius: '4px',
-    border: '1px solid #555',
-    flexShrink: 0,
+// Static styles that don't depend on state
+const baseStyles = {
+    authorImageStyles: {
+        width: '18px',
+        height: '18px',
+        borderRadius: '50%',
+        border: '1px solid #666',
+        objectFit: 'cover',
+        marginRight: '2px',
+    },
+    authorNameStyles: {
+        fontWeight: 'normal',
+        fontSize: '11px',
+        color: '#ccc',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        maxWidth: '150px',
+        wordBreak: 'break-all',
+        display: '-webkit-box',
+        WebkitLineClamp: 2,
+        WebkitBoxOrient: 'vertical',
+        lineHeight: '1.2',
+    },
+    contentStyles: {
+        display: 'flex',
+        gap: '10px',
+        alignItems: 'flex-start',
+    },
+    thumbnailStyles: {
+        width: '110px',
+        aspectRatio: '16 / 9',
+        objectFit: 'cover',
+        borderRadius: '4px',
+        border: '1px solid #555',
+        flexShrink: 0,
+    },
+    closeButtonStyles: {
+        position: 'absolute',
+        top: '6px',
+        right: '8px',
+        background: 'transparent',
+        border: 'none',
+        color: '#aaa',
+        fontSize: '20px',
+        cursor: 'pointer',
+        padding: '4px',
+        lineHeight: '1',
+        zIndex: 1,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '24px',
+        height: '24px',
+        borderRadius: '50%',
+        transition: 'all 0.2s ease',
+    },
+    closeButtonHoverStyles: {
+        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        color: '#fff',
+    },
+    controlsRowStyles: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        padding: '8px',
+        borderRadius: '6px',
+        width: '100%',
+        boxSizing: 'border-box'
+    },
+    settingsButtonStyles: {
+        width: '30px',
+        height: '30px',
+        borderRadius: '4px',
+        backgroundColor: '#444',
+        border: 'none',
+        color: '#aaa',
+        fontSize: '14px',
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        transition: 'all 0.2s ease',
+        padding: 0,
+    },
+    settingsButtonHoverStyles: {
+        backgroundColor: '#555',
+        color: '#fff',
+    },
+    settingsButtonContainer: {
+        backgroundColor: '#383838',
+        padding: '8px',
+        borderRadius: '6px',
+        display: 'flex',
+        alignItems: 'center',
+        height: '36px',
+    },
+    toggleContainer: {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: '#383838',
+        borderRadius: '6px',
+        padding: '8px',
+        cursor: 'pointer',
+        flexGrow: 1,
+        height: '36px',
+    }
 };
 
 const videoInfoStyles = {
@@ -104,63 +160,7 @@ const metadataSeparator = {
     margin: '0 2px',
 };
 
-const buttonStyles = {
-    backgroundColor: '#007bff',
-    color: 'white',
-    border: 'none',
-    padding: '8px 12px',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    textAlign: 'center',
-    fontSize: '13px',
-    fontWeight: '500',
-    marginTop: '5px',
-    transition: 'background-color 0.2s ease, transform 0.1s ease',
-    width: '100%',
-};
-
-const closeButtonStyles = {
-    position: 'absolute',
-    top: '6px',
-    right: '8px',
-    background: 'transparent',
-    border: 'none',
-    color: '#aaa',
-    fontSize: '20px',
-    cursor: 'pointer',
-    padding: '4px',
-    lineHeight: '1',
-    zIndex: 1,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '24px',
-    height: '24px',
-    borderRadius: '50%',
-    transition: 'background-color 0.2s ease, color 0.2s ease',
-    backgroundColor: 'transparent', // Explicitly set the default background
-};
-
-const closeButtonHoverStyles = {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    color: '#fff',
-};
-
 // --- Toggle Switch Styles --- (New)
-const toggleContainerStyles = {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#444',
-    borderRadius: '6px',
-    padding: '8px 12px',
-    cursor: 'pointer',
-    marginTop: '5px',
-    width: '100%', // Span full width
-    boxSizing: 'border-box', // Include padding in width
-    transition: 'background-color 0.2s ease',
-};
-
 const toggleLabelStyles = {
     fontSize: '13px',
     fontWeight: '500',
@@ -240,6 +240,51 @@ const DanmakuMatchPopup = ({ matchData, onShowDanmaku, onClosePopup, initialOver
     const [isActive, setIsActive] = useState(initialOverlayActive);
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [isCloseHovered, setIsCloseHovered] = useState(false);
+    const [showSettings, setShowSettings] = useState(false);
+    const [isSettingsHovered, setIsSettingsHovered] = useState(false);
+    const [settings, setSettings] = useState({
+        fontSize: 24,
+        speed: 48,
+        opacity: 1,
+        fontWeight: 'bold',
+        textShadow: true,
+        density: 1
+    });
+
+    // Dynamic styles that depend on state
+    const dynamicStyles = {
+        popupContainer: {
+            position: 'fixed',
+            bottom: '20px',
+            right: '20px',
+            backgroundColor: '#282828',
+            color: '#e0e0e0',
+            padding: '12px',
+            borderRadius: '8px',
+            zIndex: '2147483647',
+            boxShadow: '0 5px 15px rgba(0,0,0,0.3)',
+            fontFamily: 'Roboto, Arial, "Noto Sans SC", sans-serif',
+            fontSize: '13px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+            border: '1px solid #444',
+            width: '340px',
+            transition: 'all 0.3s ease-in-out',
+            maxHeight: showSettings ? '600px' : '200px',
+            overflow: 'hidden'
+        },
+        settingsPanel: {
+            backgroundColor: '#383838',
+            borderRadius: '6px',
+            marginTop: '8px',
+            overflow: 'hidden',
+            transition: 'all 0.3s ease-in-out',
+            opacity: showSettings ? 1 : 0,
+            maxHeight: showSettings ? '500px' : '0',
+            transform: showSettings ? 'translateY(0)' : 'translateY(-10px)'
+        }
+    };
 
     useEffect(() => {
         const handleFullscreenChange = () => {
@@ -271,8 +316,6 @@ const DanmakuMatchPopup = ({ matchData, onShowDanmaku, onClosePopup, initialOver
         }
     }, [initialOverlayActive]);
 
-    if (!matchData || isFullscreen) return null;
-
     const handleToggle = (e) => {
         e.stopPropagation(); // Prevent potential interference
         e.preventDefault(); // Prevent default browser action for label/input click
@@ -300,10 +343,28 @@ const DanmakuMatchPopup = ({ matchData, onShowDanmaku, onClosePopup, initialOver
     const videoThumbnail = ensureHttpsUrl(matchData.pic);
     const publicationDate = formatDate(matchData.pubdate);
 
+    const handleSettingsChange = (newSettings) => {
+        setSettings(newSettings);
+        // Pass settings up to parent component
+        if (onShowDanmaku) {
+            // We'll reuse onShowDanmaku to trigger a settings update
+            // by toggling the overlay off and on
+            onShowDanmaku(false);
+            setTimeout(() => {
+                onShowDanmaku(true);
+            }, 50);
+        }
+    };
+
+    if (!matchData || isFullscreen) return null;
+
     return (
-        <div style={popupStyles}>
+        <div style={dynamicStyles.popupContainer}>
             <button
-                style={{ ...closeButtonStyles, ...(isCloseHovered ? closeButtonHoverStyles : {}) }}
+                style={{
+                    ...baseStyles.closeButtonStyles,
+                    ...(isCloseHovered ? baseStyles.closeButtonHoverStyles : {})
+                }}
                 onClick={handleClose}
                 onMouseEnter={() => setIsCloseHovered(true)}
                 onMouseLeave={() => setIsCloseHovered(false)}
@@ -312,14 +373,21 @@ const DanmakuMatchPopup = ({ matchData, onShowDanmaku, onClosePopup, initialOver
                 &times;
             </button>
 
-            <div style={contentStyles}>
-                {videoThumbnail && <img src={videoThumbnail} alt="Video thumbnail" style={thumbnailStyles} referrerPolicy="no-referrer" />}
+            <div style={baseStyles.contentStyles}>
+                {videoThumbnail && (
+                    <img
+                        src={videoThumbnail}
+                        alt="Video thumbnail"
+                        style={baseStyles.thumbnailStyles}
+                        referrerPolicy="no-referrer"
+                    />
+                )}
                 <div style={videoInfoStyles}>
                     <div style={titleStyles} title={matchData.title}>{matchData.title}</div>
                     <div style={metadataContainerStyles}>
                         <div style={metadataLineStyles}>
-                            {authorFace && <img src={authorFace} alt={authorName} style={authorImageStyles} referrerPolicy="no-referrer" />}
-                            {authorFace && <span style={authorNameStyles} title={authorName}>{authorName}</span>}
+                            {authorFace && <img src={authorFace} alt={authorName} style={baseStyles.authorImageStyles} referrerPolicy="no-referrer" />}
+                            {authorFace && <span style={baseStyles.authorNameStyles} title={authorName}>{authorName}</span>}
                             {authorFace && <span style={metadataSeparator}>•</span>}
                             <span>{matchData.duration || 'N/A'}</span>
                             <span style={metadataSeparator}>•</span>
@@ -329,19 +397,43 @@ const DanmakuMatchPopup = ({ matchData, onShowDanmaku, onClosePopup, initialOver
                 </div>
             </div>
 
-            {/* Toggle Switch Area */}
-            <div style={toggleContainerStyles} onClick={handleToggle} role="button" tabIndex={0}>
-                <span style={toggleLabelStyles}>Danmaku Overlay</span>
-                <label style={switchStyles}>
-                    <input
-                        type="checkbox"
-                        checked={isActive}
-                        style={switchInputStyles}
-                    />
-                    <span style={{ ...sliderStyles, ...(isActive ? checkedSliderStyles : {}) }}>
-                        <span style={{ ...sliderBeforeStyles, ...(isActive ? checkedSliderBeforeStyles : {}) }}></span>
-                    </span>
-                </label>
+            <div style={baseStyles.controlsRowStyles}>
+                <div style={baseStyles.settingsButtonContainer}>
+                    <button
+                        style={{
+                            ...baseStyles.settingsButtonStyles,
+                            ...(isSettingsHovered ? baseStyles.settingsButtonHoverStyles : {})
+                        }}
+                        onClick={() => setShowSettings(!showSettings)}
+                        onMouseEnter={() => setIsSettingsHovered(true)}
+                        onMouseLeave={() => setIsSettingsHovered(false)}
+                        title="Danmaku Settings"
+                    >
+                        <i className="fas fa-cog"></i>
+                    </button>
+                </div>
+
+                <div style={baseStyles.toggleContainer}>
+                    <span style={toggleLabelStyles}>Danmaku Overlay</span>
+                    <label style={switchStyles}>
+                        <input
+                            type="checkbox"
+                            checked={isActive}
+                            onChange={handleToggle}
+                            style={switchInputStyles}
+                        />
+                        <span style={{ ...sliderStyles, ...(isActive ? checkedSliderStyles : {}) }}>
+                            <span style={{ ...sliderBeforeStyles, ...(isActive ? checkedSliderBeforeStyles : {}) }}></span>
+                        </span>
+                    </label>
+                </div>
+            </div>
+
+            <div style={dynamicStyles.settingsPanel}>
+                <DanmakuSettings
+                    initialSettings={settings}
+                    onSettingsChange={handleSettingsChange}
+                />
             </div>
         </div>
     );
@@ -353,18 +445,18 @@ DanmakuMatchPopup.propTypes = {
         aid: PropTypes.number,
         cid: PropTypes.number,
         title: PropTypes.string,
-        pic: PropTypes.string, // Thumbnail URL
-        duration: PropTypes.string, // e.g., "MM:SS"
-        author: PropTypes.string, // From search results (fallback)
-        owner: PropTypes.shape({ // From detailed view API
+        pic: PropTypes.string,
+        duration: PropTypes.string,
+        author: PropTypes.string,
+        owner: PropTypes.shape({
             name: PropTypes.string,
-            face: PropTypes.string, // Author profile picture URL
+            face: PropTypes.string,
         }),
-        pubdate: PropTypes.number, // Unix timestamp (seconds)
+        pubdate: PropTypes.number,
     }),
     onShowDanmaku: PropTypes.func.isRequired,
     onClosePopup: PropTypes.func.isRequired,
-    initialOverlayActive: PropTypes.bool.isRequired, // Renamed prop for clarity
+    initialOverlayActive: PropTypes.bool.isRequired,
 };
 
 export default DanmakuMatchPopup; 
