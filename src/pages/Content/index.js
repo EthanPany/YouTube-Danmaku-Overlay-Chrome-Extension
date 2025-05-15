@@ -880,39 +880,50 @@ async function init() {
     }
 
     let lastCheckedUrl = window.location.href;
-    let lastVideoId = currentVideoId;
+    let lastVideoId = null; // Initialize lastVideoId consistently
     let initializationInProgress = false;
 
     // Initial run
     const initialVideoId = getYouTubeVideoId();
     if (initialVideoId) {
-        await handleVideoChange(initialVideoId);
+        // Ensure no other initialization is in progress and it's a new ID (or first run)
+        if (!initializationInProgress && initialVideoId !== lastVideoId) {
+            lastVideoId = initialVideoId; // Set before starting
+            initializationInProgress = true;
+            try {
+                await handleVideoChange(initialVideoId);
+            } catch (error) {
+                debugError('Error during initial handleVideoChange:', error);
+            } finally {
+                initializationInProgress = false;
+            }
+        }
     }
 
     // Create a more robust observer for video changes
     const videoChangeObserver = new MutationObserver(async (mutations) => {
-        if (initializationInProgress) return;
+        if (initializationInProgress) return; // Check lock
 
-        try {
-            const currentUrl = window.location.href;
-            const newVideoId = getYouTubeVideoId();
+        // Logic moved inside to ensure lock is handled correctly per identified change
+        const currentUrl = window.location.href;
+        const newVideoId = getYouTubeVideoId();
 
-            // Check if we've actually changed videos
-            if (currentUrl !== lastCheckedUrl || newVideoId !== lastVideoId) {
-                lastCheckedUrl = currentUrl;
+        // Check if we've actually changed videos or URL
+        if (currentUrl !== lastCheckedUrl || newVideoId !== lastVideoId) {
+            lastCheckedUrl = currentUrl; // Update checked URL
 
-                // Only proceed if we have a valid video ID and it's different
-                if (newVideoId && newVideoId !== lastVideoId) {
-                    lastVideoId = newVideoId;
-                    initializationInProgress = true;
-
+            // Only proceed if we have a valid new video ID and it's different
+            if (newVideoId && newVideoId !== lastVideoId) {
+                lastVideoId = newVideoId;         // Update global lastVideoId
+                initializationInProgress = true;  // Set lock
+                try {
                     await handleVideoChange(newVideoId);
+                } catch (error) {
+                    debugError('Error in video change observer during handleVideoChange:', error);
+                } finally {
+                    initializationInProgress = false; // Release lock
                 }
             }
-        } catch (error) {
-            debugError('Error in video change observer:', error);
-        } finally {
-            initializationInProgress = false;
         }
     });
 
