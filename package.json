@@ -14,14 +14,15 @@
   },
   "dependencies": {
     "@babel/runtime": "^7.24.0",
+    "chinese-conv": "^3.2.2",
+    "danmaku": "^2.0.8",
     "global": "^4.4.0",
     "jquery": "^3.7.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.22.3",
     "socket.io-client": "^4.7.5",
-    "string-similarity": "^4.0.4",
-    "danmaku": "^2.0.8"
+    "string-similarity": "^4.0.4"
   },
   "devDependencies": {
     "@babel/core": "^7.20.12",

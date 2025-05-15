@@ -90,7 +90,11 @@ var options = {
       },
       {
         test: /\.(ts|tsx)$/,
-        exclude: /node_modules/,
+        exclude: [
+          /node_modules\/(?!chinese-conv)/,
+          /\.test\.[jt]sx?$/,
+          /node_modules\/chinese-conv\/.*\.test\.[jt]sx?$/
+        ],
         use: [
           {
             loader: require.resolve('ts-loader'),
@@ -100,7 +104,8 @@ var options = {
                   Boolean
                 ),
               }),
-              transpileOnly: isDevelopment,
+              transpileOnly: true,
+              allowTsInNodeModules: true
             },
           },
         ],

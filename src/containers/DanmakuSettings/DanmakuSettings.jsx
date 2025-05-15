@@ -42,7 +42,7 @@ const DanmakuSettings = ({ initialSettings, onSettingsChange }) => {
                     <input
                         type="range"
                         min="24"
-                        max="200"
+                        max="300"
                         value={settings.speed}
                         onChange={(e) => handleChange('speed', parseInt(e.target.value))}
                     />

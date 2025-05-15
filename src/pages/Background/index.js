@@ -105,4 +105,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
         return true; // Indicates that the response is sent asynchronously
     }
+
+    if (request.type === 'SAVE_SETTINGS') {
+        // Forward the settings to the content script of the active tab
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            if (tabs[0]) {
+                chrome.tabs.sendMessage(tabs[0].id, {
+                    type: 'UPDATE_SETTINGS',
+                    settings: request.settings
+                });
+            }
+        });
+    }
+    return true;
 });

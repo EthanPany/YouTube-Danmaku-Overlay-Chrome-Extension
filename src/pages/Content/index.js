@@ -70,8 +70,23 @@ async function saveSettings(settings) {
         debugLog('Saved settings:', newSettings);
 
         // Immediately apply new settings if danmaku is active
-        if (danmakuInstance && currentOverlayState && danmakuList.length > 0) {
-            updateDanmakuWithSettings();
+        if (danmakuInstance && currentOverlayState) {
+            danmakuInstance.clear();
+            danmakuInstance.speed = newSettings.speed;
+            danmakuInstance.opacity = newSettings.opacity;
+            danmakuInstance.fontSize = newSettings.fontSize;
+
+            // Update container opacity
+            const container = document.getElementById(DANMAKU_OVERLAY_ID);
+            if (container) {
+                container.style.opacity = newSettings.opacity;
+            }
+
+            // Reapply density by filtering comments
+            if (danmakuList.length > 0) {
+                const densityAdjustedComments = danmakuList.filter(() => Math.random() <= newSettings.density);
+                setupDanmakuOverlay(densityAdjustedComments);
+            }
         }
     } catch (error) {
         debugError('Error saving settings:', error);
@@ -188,10 +203,11 @@ function cleanupUI(fullReset = true) {
     cleanupSettingsPanel();
 
     const popupDiv = document.getElementById(BILIBILI_POPUP_ID);
-    if (popupDiv && reactRoot) {
-        reactRoot.unmount();
-        reactRoot = null;
-    } else if (popupDiv) {
+    if (popupDiv) {
+        if (reactRoot) {
+            reactRoot.unmount();
+            reactRoot = null;
+        }
         popupDiv.remove();
     }
 
@@ -390,6 +406,8 @@ async function handleShowDanmakuToggle(newState) {
             const fetchedDanmaku = await fetchDanmaku(cid);
             if (fetchedDanmaku) {
                 danmakuList = fetchedDanmaku;
+                // Re-render popup with updated count
+                renderPopup(true);
             } else {
                 debugError('Failed to fetch danmaku');
                 return;
@@ -425,6 +443,9 @@ function renderPopup(show = true) {
         reactRoot = ReactDOM.createRoot(container);
     }
 
+    // Add debug logging
+    debugLog('Rendering popup with danmaku count:', danmakuList.length);
+
     isPopupVisible = true;
     reactRoot.render(
         <React.StrictMode>
@@ -433,147 +454,204 @@ function renderPopup(show = true) {
                 onShowDanmaku={handleShowDanmakuToggle}
                 onClosePopup={() => renderPopup(false)}
                 initialOverlayActive={currentOverlayState}
+                danmakuCount={danmakuList.length}
             />
         </React.StrictMode>
     );
 }
 
 async function processVideoMatch(ytData) {
-    debugLog('Processing video match:', ytData);
+    try {
+        const searchResults = await searchBili(ytData.title);
+        if (!searchResults || searchResults.length === 0) {
+            debugLog('No Bilibili videos found');
+            return null;
+        }
 
-    const biliSearchResults = await searchBili(ytData.title);
-    if (!biliSearchResults || biliSearchResults.length === 0) {
-        debugLog('No Bilibili search results found');
-        return false;
-    }
+        // Get detailed info for each result
+        const detailedResults = await Promise.all(
+            searchResults.map(async (result) => {
+                const details = await getBilibiliVideoDetails(result.bvid);
+                return details ? { ...result, ...details } : null;
+            })
+        );
 
-    // Use more lenient thresholds for better matching
-    const titleSimilarityThreshold = 0.3;  // 30% similarity required
-    const durationToleranceSeconds = 300;  // 5 minutes tolerance
-    debugLog(`Using thresholds - Title Similarity: ${titleSimilarityThreshold * 100}%, Duration Tolerance: ${durationToleranceSeconds}s`);
+        // Filter out null results and find best match
+        const validResults = detailedResults.filter(Boolean);
+        const bestMatch = findBestMatch(ytData, validResults);
 
-    const bestMatch = findBestMatch(ytData, biliSearchResults, titleSimilarityThreshold, durationToleranceSeconds);
-    if (!bestMatch) {
+        if (bestMatch) {
+            debugLog('Found matching Bilibili video:', bestMatch);
+
+            // Fetch danmaku immediately after finding a match
+            if (bestMatch.cid) {
+                const fetchedDanmaku = await fetchDanmaku(bestMatch.cid);
+                if (fetchedDanmaku) {
+                    danmakuList = fetchedDanmaku;
+                }
+            }
+
+            return bestMatch;
+        }
+
         debugLog('No suitable match found');
-        return false;
+        return null;
+    } catch (error) {
+        debugError('Error in processVideoMatch:', error);
+        return null;
     }
+}
 
-    debugLog('Best Bilibili match found:', bestMatch);
+// Add these new utility functions at the top level
+function waitForElement(selector, timeout = 10000) {
+    return new Promise((resolve, reject) => {
+        if (document.querySelector(selector)) {
+            return resolve(document.querySelector(selector));
+        }
 
-    // Store the initially matched data
-    matchedBiliData = { ...bestMatch };
+        const observer = new MutationObserver(() => {
+            if (document.querySelector(selector)) {
+                observer.disconnect();
+                resolve(document.querySelector(selector));
+            }
+        });
 
-    // Attempt to get full details including CID upfront
-    const detailedBiliInfo = await getBilibiliVideoDetails(bestMatch.bvid);
-    if (detailedBiliInfo) {
-        matchedBiliData = {
-            ...detailedBiliInfo,
-            cid: detailedBiliInfo.cid,
-            aid: detailedBiliInfo.aid
-        };
-        debugLog('Retrieved detailed Bilibili info:', matchedBiliData);
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+
+        // Timeout after specified duration
+        setTimeout(() => {
+            observer.disconnect();
+            reject(new Error(`Timeout waiting for element: ${selector}`));
+        }, timeout);
+    });
+}
+
+async function waitForYouTubeInit(maxRetries = 5) {
+    for (let i = 0; i < maxRetries; i++) {
+        try {
+            // Wait for critical YouTube elements
+            await Promise.all([
+                waitForElement('video'),
+                waitForElement('#movie_player'),
+                waitForElement('.ytp-title-link')
+            ]);
+
+            // Additional delay to ensure elements are fully initialized
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
+            const ytData = extractYouTubeVideoData();
+            if (ytData) {
+                return ytData;
+            }
+        } catch (error) {
+            debugLog(`Attempt ${i + 1}/${maxRetries} to initialize failed:`, error);
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
     }
-
-    // Show the popup with current state
-    renderPopup(true);
-
-    // If the overlay was previously active for this video, reactivate it
-    if (currentOverlayState) {
-        await handleShowDanmakuToggle(true);
-    }
-
-    return true;
+    throw new Error('Failed to initialize YouTube video data after multiple attempts');
 }
 
 async function main() {
-    const videoId = getYouTubeVideoId();
-    if (!videoId) {
-        debugLog('Not a YouTube watch page');
-        cleanupUI(true);
-        return;
-    }
-
-    if (videoId === currentVideoId && matchedBiliData) {
-        debugLog('Video ID unchanged, updating UI');
-        const storageKey = getStorageKey();
-        if (storageKey) {
-            chrome.storage.local.get([storageKey], result => {
-                currentOverlayState = result[storageKey] || false;
-                renderPopup(true);
-                if (currentOverlayState && danmakuList.length > 0) {
-                    setupDanmakuOverlay(danmakuList);
-                }
-            });
-        }
-        return;
-    }
-
-    debugLog('New video detected:', videoId);
-    currentVideoId = videoId;
-    cleanupUI(false);
-
-    const storageKey = getStorageKey();
-    chrome.storage.local.get([storageKey], async result => {
-        currentOverlayState = result[storageKey] || false;
-
-        const ytData = extractYouTubeVideoData();
+    try {
+        // Wait for YouTube to be fully initialized
+        const ytData = await waitForYouTubeInit();
         if (!ytData) {
-            debugLog('Could not extract video data');
+            debugLog('Could not extract YouTube video data after waiting');
             return;
         }
 
-        await processVideoMatch(ytData);
-    });
+        const videoId = getYouTubeVideoId();
+        if (!videoId) {
+            debugLog('Could not get YouTube video ID');
+            return;
+        }
+
+        // Update current video ID
+        currentVideoId = videoId;
+
+        // Process video match
+        matchedBiliData = await processVideoMatch(ytData);
+
+        // Show popup with results
+        renderPopup();
+    } catch (error) {
+        debugError('Error in main:', error);
+    }
 }
 
 async function init() {
+    debugLog('Initializing content script');
     await loadSettings();
-    main();
+    setupSettingsPanel();
 
-    // Handle YouTube SPA navigation
-    const navigationObserver = new MutationObserver((mutations) => {
-        for (const mutation of mutations) {
-            if (mutation.type === 'childList' || mutation.type === 'attributes') {
+    let lastCheckedUrl = window.location.href;
+    let lastVideoId = currentVideoId;
+    let initializationInProgress = false;
+
+    // Initial run with retry
+    await main().catch(debugError);
+
+    // Watch for navigation between videos
+    const observer = new MutationObserver(async () => {
+        // Prevent multiple simultaneous initialization attempts
+        if (initializationInProgress) {
+            return;
+        }
+
+        try {
+            // Check if URL has changed
+            if (window.location.href !== lastCheckedUrl) {
+                lastCheckedUrl = window.location.href;
                 const newVideoId = getYouTubeVideoId();
-                if (newVideoId && newVideoId !== currentVideoId) {
-                    debugLog('Video change detected:', newVideoId);
-                    setTimeout(() => {
-                        cleanupDanmakuOverlay();
-                        main();
-                    }, 500); // Small delay to ensure YouTube UI is ready
-                    break;
+
+                // Only proceed if we have a valid video ID and it's different from the last one
+                if (newVideoId && newVideoId !== lastVideoId) {
+                    debugLog('Video changed, cleaning up and reinitializing');
+                    lastVideoId = newVideoId;
+
+                    // Set initialization flag
+                    initializationInProgress = true;
+
+                    // Full cleanup of old state
+                    cleanupUI(true);
+
+                    // Reset critical state variables
+                    matchedBiliData = null;
+                    danmakuList = [];
+                    currentOverlayState = false;
+                    isCurrentlyInAd = false;
+
+                    // Wait for YouTube to be ready
+                    await main();
                 }
             }
+        } catch (error) {
+            debugError('Error during video change handling:', error);
+        } finally {
+            initializationInProgress = false;
         }
     });
 
-    // Observe both URL changes and player changes
-    navigationObserver.observe(document.body, {
+    // Observe changes to the document body and title
+    observer.observe(document.body, {
         childList: true,
         subtree: true,
         attributes: true,
         attributeFilter: ['src', 'href']
     });
 
-    // Also keep the yt-navigate-finish event listener as a fallback
-    document.body.addEventListener('yt-navigate-finish', () => {
-        debugLog('YouTube navigation event detected');
-        const newVideoId = getYouTubeVideoId();
-        if (newVideoId && newVideoId !== currentVideoId) {
-            cleanupDanmakuOverlay();
-            setTimeout(main, 500);
-        }
-    });
-
-    // Handle history changes (back/forward navigation)
-    window.addEventListener('popstate', () => {
-        debugLog('History navigation detected');
-        const newVideoId = getYouTubeVideoId();
-        if (newVideoId && newVideoId !== currentVideoId) {
-            cleanupDanmakuOverlay();
-            setTimeout(main, 500);
-        }
-    });
+    // Also observe the title element for changes
+    const titleElement = document.querySelector('title');
+    if (titleElement) {
+        observer.observe(titleElement, {
+            childList: true,
+            characterData: true,
+            subtree: true
+        });
+    }
 }
 
 // Run the initialization

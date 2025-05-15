@@ -74,11 +74,12 @@ const baseStyles = {
         display: 'flex',
         alignItems: 'center',
         gap: '8px',
-        padding: 0,
+        padding: '0px',
         margin: 0,
         borderRadius: '6px',
         width: '100%',
-        boxSizing: 'border-box'
+        boxSizing: 'border-box',
+        backgroundColor: 'transparent'
     },
     settingsButtonStyles: {
         width: '30px',
@@ -107,19 +108,21 @@ const baseStyles = {
         display: 'flex',
         alignItems: 'center',
         height: '30px',
-        margin: 0
+        margin: 0,
+        order: -1
     },
     toggleContainer: {
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'space-between',
+        gap: '8px',
         backgroundColor: '#383838',
         borderRadius: '6px',
         padding: '4px 8px',
         cursor: 'pointer',
         flexGrow: 1,
         height: '30px',
-        margin: 0
+        margin: 0,
+        justifyContent: 'space-between'
     }
 };
 
@@ -154,12 +157,25 @@ const metadataContainerStyles = {
 
 const metadataLineStyles = {
     display: 'flex',
-    alignItems: 'flex-start', // Changed from center to allow proper wrapping
+    alignItems: 'flex-start',
     gap: '6px',
-    flexWrap: 'wrap', // Allow wrapping if needed
+    flexWrap: 'wrap',
     fontSize: '11px',
     color: '#aaa',
     lineHeight: '1.2',
+};
+
+const danmakuCountStyles = {
+    fontSize: '13px',
+    color: '#fff',
+    display: 'inline-flex',
+    alignItems: 'center',
+    padding: '2px 8px',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: '4px',
+    marginLeft: '8px',
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    fontWeight: '500'
 };
 
 const metadataSeparator = {
@@ -242,7 +258,17 @@ function formatDate(timestamp) {
     }
 }
 
-const DanmakuMatchPopup = ({ matchData, onShowDanmaku, onClosePopup, initialOverlayActive }) => {
+// Add number formatting function
+function formatCount(count) {
+    if (count >= 1000000) {
+        return (count / 1000000).toFixed(1) + 'M';
+    } else if (count >= 10000) {
+        return (count / 1000).toFixed(1) + 'K';
+    }
+    return count.toString();
+}
+
+const DanmakuMatchPopup = ({ matchData, onShowDanmaku, onClosePopup, initialOverlayActive, danmakuCount = 0 }) => {
     const [isActive, setIsActive] = useState(initialOverlayActive);
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [isCloseHovered, setIsCloseHovered] = useState(false);
@@ -256,6 +282,21 @@ const DanmakuMatchPopup = ({ matchData, onShowDanmaku, onClosePopup, initialOver
         textShadow: true,
         density: 1
     });
+
+    // Load settings from storage on mount
+    useEffect(() => {
+        const loadSettings = async () => {
+            try {
+                const result = await chrome.storage.local.get('youtubeDanmakuSettings');
+                if (result.youtubeDanmakuSettings) {
+                    setSettings(result.youtubeDanmakuSettings);
+                }
+            } catch (error) {
+                console.error('Error loading settings:', error);
+            }
+        };
+        loadSettings();
+    }, []);
 
     // Dynamic styles that depend on state
     const dynamicStyles = {
@@ -354,15 +395,11 @@ const DanmakuMatchPopup = ({ matchData, onShowDanmaku, onClosePopup, initialOver
 
     const handleSettingsChange = (newSettings) => {
         setSettings(newSettings);
-        // Pass settings up to parent component
-        if (onShowDanmaku) {
-            // We'll reuse onShowDanmaku to trigger a settings update
-            // by toggling the overlay off and on
-            onShowDanmaku(false);
-            setTimeout(() => {
-                onShowDanmaku(true);
-            }, 50);
-        }
+        // Save settings to storage and update danmaku
+        chrome.runtime.sendMessage({
+            type: 'SAVE_SETTINGS',
+            settings: newSettings
+        });
     };
 
     if (!matchData || isFullscreen) return null;
@@ -424,6 +461,11 @@ const DanmakuMatchPopup = ({ matchData, onShowDanmaku, onClosePopup, initialOver
 
                 <div style={baseStyles.toggleContainer}>
                     <span style={toggleLabelStyles}>Danmaku Overlay</span>
+                    {danmakuCount > 0 && (
+                        <span style={danmakuCountStyles}>
+                            {formatCount(danmakuCount)} 弹幕
+                        </span>
+                    )}
                     <label style={switchStyles}>
                         <input
                             type="checkbox"
@@ -466,6 +508,7 @@ DanmakuMatchPopup.propTypes = {
     onShowDanmaku: PropTypes.func.isRequired,
     onClosePopup: PropTypes.func.isRequired,
     initialOverlayActive: PropTypes.bool.isRequired,
+    danmakuCount: PropTypes.number,
 };
 
 export default DanmakuMatchPopup; 
