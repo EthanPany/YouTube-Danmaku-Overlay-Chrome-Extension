@@ -1,6 +1,13 @@
 import { compareTwoStrings } from 'string-similarity';
 import { sify } from 'chinese-conv/dist';
 
+// Clean up console logs to only show important information
+const CLEAN_LOGS = true; // Set to true to enable clean logging
+
+function cleanLog(...args) {
+    if (CLEAN_LOGS) console.log('🍥', ...args);
+}
+
 // Helper function to clean and normalize text for Chinese content
 function normalizeText(text) {
     if (!text) return '';
@@ -43,40 +50,113 @@ function splitIntoTokens(text) {
     return new Set(combinedTokens);
 }
 
-// Calculate similarity between two texts using both character overlap and string similarity
+// Calculate similarity between two texts using improved overlap logic for better title matching
 function calculateTextSimilarity(text1, text2) {
     if (!text1 || !text2) return 0;
 
-    // Normalize the texts
-    const clean1 = normalizeText(text1);
-    const clean2 = normalizeText(text2);
+    // First convert both texts to simplified Chinese
+    const simplified1 = toSimplifiedChinese(text1);
+    const simplified2 = toSimplifiedChinese(text2);
 
-    if (clean1 === clean2) return 1.0; // Exact match
-    if (clean1.length === 0 || clean2.length === 0) return 0;
+    // Convert to lowercase and clean special characters
+    const clean1 = simplified1.toLowerCase().replace(/[【】\[\]()（）\s#]/g, '').replace(/\s+/g, '');
+    const clean2 = simplified2.toLowerCase().replace(/[【】\[\]()（）\s#]/g, '').replace(/\s+/g, '');
 
-    // For Chinese text, use token-based approach for better results
-    const tokens1 = splitIntoTokens(clean1);
-    const tokens2 = splitIntoTokens(clean2);
-
-    // Calculate word overlap (Jaccard similarity)
-    const set1 = new Set(tokens1);
-    const set2 = new Set(tokens2);
-
-    // Find intersection
-    const intersection = [...set1].filter(token => set2.has(token));
-
-    // Calculate Jaccard similarity coefficient
-    const jaccard = intersection.length / (set1.size + set2.size - intersection.length);
-
-    // For short texts, combine with character-level similarity
-    if (clean1.length < 10 || clean2.length < 10) {
-        // Use Levenshtein distance for character-level similarity
-        const levenshtein = calculateLevenshteinSimilarity(clean1, clean2);
-        // Weighted average of token-based and character-based similarity
-        return 0.7 * jaccard + 0.3 * levenshtein;
+    // Handle perfect match after cleaning
+    if (clean1 === clean2) {
+        return 1.0;
     }
 
-    return jaccard;
+    // If one string contains the other (and they are not identical), calculate similarity based on length ratio
+    if (clean1.includes(clean2)) {
+        return clean2.length / clean1.length; // Score based on how much of clean1 is covered by clean2
+    }
+    if (clean2.includes(clean1)) {
+        return clean1.length / clean2.length; // Score based on how much of clean2 is covered by clean1
+    }
+
+    // Split into Chinese characters and words
+    const tokens1 = Array.from(clean1.match(/[\u4e00-\u9fa5]|[a-zA-Z]+|\d+/g) || []);
+    const tokens2 = Array.from(clean2.match(/[\u4e00-\u9fa5]|[a-zA-Z]+|\d+/g) || []);
+
+    if (tokens1.length === 0 || tokens2.length === 0) return 0;
+
+    // Create bigrams for better Chinese text matching
+    const bigrams1 = new Set();
+    const bigrams2 = new Set();
+
+    // Add individual tokens and bigrams
+    for (let i = 0; i < tokens1.length - 1; i++) {
+        bigrams1.add(tokens1[i]);
+        if (tokens1[i].match(/[\u4e00-\u9fa5]/)) {
+            bigrams1.add(tokens1[i] + tokens1[i + 1]);
+        }
+    }
+    if (tokens1.length > 0) bigrams1.add(tokens1[tokens1.length - 1]);
+
+    for (let i = 0; i < tokens2.length - 1; i++) {
+        bigrams2.add(tokens2[i]);
+        if (tokens2[i].match(/[\u4e00-\u9fa5]/)) {
+            bigrams2.add(tokens2[i] + tokens2[i + 1]);
+        }
+    }
+    if (tokens2.length > 0) bigrams2.add(tokens2[tokens2.length - 1]);
+
+    if (bigrams1.size === 0 && bigrams2.size === 0) return 0; // Avoid division by zero if both are empty after bigramming
+
+    // Calculate Jaccard similarity with bigrams
+    const intersection = new Set([...bigrams1].filter(x => bigrams2.has(x)));
+    const union = new Set([...bigrams1, ...bigrams2]);
+
+    if (union.size === 0) return 0; // Avoid division by zero if union is empty
+    const similarity = intersection.size / union.size;
+
+    // Add bonus for sequential matches
+    let sequentialBonus = 0;
+    if (tokens1.length > 0 && tokens2.length > 0) {
+        let currentSequence = 0;
+        let maxSequence = 0;
+
+        for (let i = 0; i < tokens1.length; i++) {
+            for (let j = 0; j < tokens2.length; j++) {
+                currentSequence = 0;
+                while (i + currentSequence < tokens1.length &&
+                    j + currentSequence < tokens2.length &&
+                    tokens1[i + currentSequence] === tokens2[j + currentSequence]) {
+                    currentSequence++;
+                }
+                maxSequence = Math.max(maxSequence, currentSequence);
+            }
+        }
+        sequentialBonus = maxSequence / Math.max(tokens1.length, tokens2.length) * 0.3;
+    }
+
+    // Add debug logging
+    // cleanLog(`Text similarity comparison:
+    //     Text 1: ${text1}
+    //     Text 2: ${text2}
+    //     Simplified 1: ${simplified1}
+    //     Simplified 2: ${simplified2}
+    //     Clean 1: ${clean1}
+    //     Clean 2: ${clean2}
+    //     Intersection size: ${intersection.size}
+    //     Union size: ${union.size}
+    //     Base Similarity: ${similarity}
+    //     Sequential Bonus: ${sequentialBonus}
+    //     Final Score: ${Math.min(1, similarity + sequentialBonus)}`);
+
+    return Math.min(1, similarity + sequentialBonus);
+}
+
+// Helper function to convert text to simplified Chinese with error handling
+function toSimplifiedChinese(text) {
+    if (!text) return '';
+    try {
+        return sify(text);
+    } catch (error) {
+        console.error('🍥 Error converting to Simplified Chinese:', error);
+        return text;
+    }
 }
 
 // Helper function to calculate Levenshtein-based similarity
@@ -160,13 +240,6 @@ function extractAuthorInfo(videoData) {
     };
 }
 
-// Clean up console logs to only show important information
-const CLEAN_LOGS = true; // Set to true to enable clean logging
-
-function cleanLog(...args) {
-    if (CLEAN_LOGS) console.log('🍥', ...args);
-}
-
 // Main matching function
 export function findBestMatch(ytData, biliResults) {
     if (!ytData || !biliResults || biliResults.length === 0) {
@@ -183,8 +256,9 @@ export function findBestMatch(ytData, biliResults) {
     let bestMatch = null;
     let bestScore = 0;
 
+    // Extract YouTube data
     const ytAuthorInfo = extractAuthorInfo(ytData);
-    const cleanYtTitle = normalizeText(ytData.title.replace(/[【「『].*?[】」』]|\(.*?\)/g, ''));
+    const cleanYtTitle = normalizeText(ytData.fullTitle.replace(/[【「『].*?[】」』]|\(.*?\)/g, ''));
 
     // Collect all results with scores to sort later
     const scoredResults = [];
@@ -193,12 +267,11 @@ export function findBestMatch(ytData, biliResults) {
         const biliAuthorInfo = extractAuthorInfo(biliVideo);
         const cleanBiliTitle = normalizeText(biliVideo.title.replace(/[【「『].*?[】」』]|\(.*?\)/g, ''));
 
-        // Calculate similarities using token-based approach for better Chinese text matching
-        const authorSimilarity = calculateTextSimilarity(
-            ytAuthorInfo.combinedAuthorInfo,
-            biliAuthorInfo.combinedAuthorInfo
-        );
+        // Calculate author similarity using channel names only
+        const authorSimilarity = ytAuthorInfo.channelName && biliAuthorInfo.channelName ?
+            calculateTextSimilarity(ytAuthorInfo.channelName, biliAuthorInfo.channelName) : 0;
 
+        // Calculate title similarity
         const titleSimilarity = calculateTextSimilarity(cleanYtTitle, cleanBiliTitle);
         const durationSimilarity = calculateDurationSimilarity(ytData.duration, biliVideo.duration);
 
@@ -242,16 +315,16 @@ export function findBestMatch(ytData, biliResults) {
     // Sort results by score (descending)
     scoredResults.sort((a, b) => b.score - a.score);
 
-    // Log only the top 5 results
-    cleanLog("Top Bilibili search results:");
-    for (let i = 0; i < Math.min(5, scoredResults.length); i++) {
-        const result = scoredResults[i];
-        cleanLog(`${i + 1}. "${result.video.title}" (Score: ${(result.score * 100).toFixed(1)}%, ` +
-            `Title: ${(result.titleSimilarity * 100).toFixed(1)}%, ` +
-            `Author: ${(result.authorSimilarity * 100).toFixed(1)}%)`);
-    }
+    // Log matching details for debugging
+    const logArray = scoredResults.map(result => ({
+        title: result.video.title,
+        titleSimilarity: result.titleSimilarity,
+        authorSimilarity: result.authorSimilarity,
+        durationSimilarity: result.durationSimilarity,
+        score: result.score
+    }));
+    cleanLog(logArray);
 
-    // Log the best match if found
     if (bestMatch) {
         cleanLog(`Final match: "${bestMatch.title}" with score ${(bestScore * 100).toFixed(1)}%`);
     }

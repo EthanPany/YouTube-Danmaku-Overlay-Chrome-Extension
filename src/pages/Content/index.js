@@ -776,30 +776,54 @@ async function handleVideoChange(newVideoId) {
         debugLog('Processing new video:', ytData.title);
 
         // Process video match
-        matchedBiliData = await processVideoMatch(ytData);
+        let foundMatch = await processVideoMatch(ytData);
 
-        if (matchedBiliData) {
-            // Pre-fetch danmaku if we have a match
-            if (matchedBiliData.cid) {
-                const fetchedDanmaku = await fetchDanmaku(matchedBiliData.cid);
-                if (fetchedDanmaku) {
-                    danmakuList = fetchedDanmaku;
+        if (foundMatch) {
+            // Always fetch complete video details to ensure we have all metadata (view count, author info, etc.)
+            const completeDetails = await getBilibiliVideoDetails(foundMatch.bvid);
+
+            if (completeDetails) {
+                // Replace the basic match data with the complete details that includes owner info, view count, etc.
+                matchedBiliData = {
+                    ...foundMatch,  // Keep original match data (like title/score)
+                    ...completeDetails  // Add complete details (owner, view_count, etc.)
+                };
+
+                // Make sure CID is set
+                if (completeDetails.cid) {
+                    matchedBiliData.cid = completeDetails.cid;
+
+                    // Fetch danmaku if we have a CID
+                    const fetchedDanmaku = await fetchDanmaku(completeDetails.cid);
+                    if (fetchedDanmaku) {
+                        danmakuList = fetchedDanmaku;
+                    }
                 }
-            } else if (matchedBiliData.bvid) {
-                // If no CID but have BVID, get details first
-                const details = await getBilibiliVideoDetails(matchedBiliData.bvid);
-                if (details?.cid) {
-                    matchedBiliData.cid = details.cid;
-                    const fetchedDanmaku = await fetchDanmaku(details.cid);
+
+                debugLog('Complete video details fetched:', {
+                    title: matchedBiliData.title,
+                    author: matchedBiliData.owner?.name || matchedBiliData.author,
+                    views: matchedBiliData.view_count || 0,
+                    danmaku: danmakuList.length
+                });
+            } else {
+                // Use basic match data if we couldn't get complete details
+                matchedBiliData = foundMatch;
+
+                // Try to fetch danmaku with basic match
+                if (foundMatch.cid) {
+                    const fetchedDanmaku = await fetchDanmaku(foundMatch.cid);
                     if (fetchedDanmaku) {
                         danmakuList = fetchedDanmaku;
                     }
                 }
             }
-        }
 
-        // Show popup with results
-        renderPopup();
+            // Show popup with results
+            renderPopup();
+        } else {
+            debugLog('No match found for video');
+        }
     } catch (error) {
         debugError('Error handling video change:', error);
     }

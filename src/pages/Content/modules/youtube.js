@@ -14,7 +14,7 @@ function cleanLog(...args) {
 export function extractYouTubeVideoData() {
     try {
         // Get title element
-        const titleElement = document.querySelector('h1.ytd-video-primary-info-renderer');
+        const titleElement = document.querySelector('ytd-video-primary-info-renderer h1.title');
         // Get channel name element
         const channelElement = document.querySelector('ytd-video-owner-renderer #channel-name');
         const player = document.querySelector('video');

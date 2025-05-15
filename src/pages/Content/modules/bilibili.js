@@ -1,4 +1,5 @@
 import { sify } from 'chinese-conv/dist';  // Import Simplified Chinese converter
+import { calculateTextSimilarity } from './match';
 
 // Clean up console logs to only show important information
 const CLEAN_LOGS = true; // Set to true to enable clean logging
@@ -93,13 +94,13 @@ export async function searchBili(keyword, channelName) {
         return videoResults
             .filter(video => {
                 // Calculate title similarity
-                const titleSimilarity = calculateSimilarity(
+                const titleSimilarity = calculateTextSimilarity(
                     toSimplifiedChinese(video.title.replace(/<em.*?>(.*?)<\/em>/g, '$1')),
                     toSimplifiedChinese(searchKeyword)
                 );
 
                 // Calculate author similarity
-                const authorSimilarity = calculateSimilarity(
+                const authorSimilarity = calculateTextSimilarity(
                     toSimplifiedChinese(video.author || ''),
                     toSimplifiedChinese(channelName || '')
                 );
@@ -141,47 +142,6 @@ export async function searchBili(keyword, channelName) {
         console.error('🍥 Error searching Bilibili:', error);
         return null;
     }
-}
-
-function calculateSimilarity(str1, str2) {
-    if (!str1 || !str2) return 0;
-
-    const s1 = str1.toLowerCase();
-    const s2 = str2.toLowerCase();
-
-    // Remove common special characters, whitespace, and hashtags
-    const clean1 = s1.replace(/[【】\[\]()（）\s#]/g, '').replace(/\s+/g, '');
-    const clean2 = s2.replace(/[【】\[\]()（）\s#]/g, '').replace(/\s+/g, '');
-
-    // If either string contains the other, consider it a strong match
-    if (clean1.includes(clean2) || clean2.includes(clean1)) {
-        return 0.9;
-    }
-
-    // Calculate Levenshtein distance
-    const matrix = Array(clean2.length + 1).fill(null)
-        .map(() => Array(clean1.length + 1).fill(null));
-
-    for (let i = 0; i <= clean1.length; i++) {
-        matrix[0][i] = i;
-    }
-    for (let j = 0; j <= clean2.length; j++) {
-        matrix[j][0] = j;
-    }
-
-    for (let j = 1; j <= clean2.length; j++) {
-        for (let i = 1; i <= clean1.length; i++) {
-            const indicator = clean1[i - 1] === clean2[j - 1] ? 0 : 1;
-            matrix[j][i] = Math.min(
-                matrix[j][i - 1] + 1,
-                matrix[j - 1][i] + 1,
-                matrix[j - 1][i - 1] + indicator
-            );
-        }
-    }
-
-    const maxLength = Math.max(clean1.length, clean2.length);
-    return maxLength === 0 ? 1 : 1 - matrix[clean2.length][clean1.length] / maxLength;
 }
 
 /**
