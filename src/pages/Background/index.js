@@ -1,7 +1,7 @@
 console.log('This is the background page.');
 console.log('Put the background scripts here.');
 
-console.log('🍥 Bilibili API Background Service Worker Loaded ��');
+console.log('🍥 Bilibili API Background Service Worker Loaded 🍥');
 
 async function getAllBiliCookies() {
     let cookieString = '';
@@ -40,8 +40,10 @@ async function getAllBiliCookies() {
 }
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.type === 'FETCH_BILI_API') {
-        console.log('🍥 Background received FETCH_BILI_API request:', request.url);
+    // Handle both the new FETCH_BILI_API type and the legacy 'action': 'fetch' format
+    if (request.type === 'FETCH_BILI_API' || (request.action && request.action === 'fetch')) {
+        const url = request.url;
+        console.log('🍥 Background received fetch request:', url);
 
         (async () => {
             try {
@@ -58,7 +60,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                     headers['Cookie'] = biliCookieString;
                 }
 
-                const response = await fetch(request.url, {
+                const response = await fetch(url, {
                     method: request.method || 'GET',
                     headers: headers,
                     credentials: 'include', // Added credentials include
@@ -91,10 +93,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                     sendResponse({ data });
                 } else if (contentType && (contentType.includes("text/xml") || contentType.includes("application/xml"))) {
                     const data = await response.text(); // Send XML as text
-                    sendResponse({ data: data, contentType: 'xml' }); // Indicate content type
+                    sendResponse({ data, contentType: 'xml' }); // Indicate content type
                 } else {
                     const data = await response.text(); // Default to text for other types
-                    sendResponse({ data: data, contentType: 'text' });
+                    sendResponse({ data, contentType: 'text' });
                 }
 
             } catch (error) {

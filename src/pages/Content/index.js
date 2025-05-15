@@ -122,11 +122,22 @@ const DanmakuManager = {
         } catch (error) {
             debugError('Error updating settings:', error);
         }
+    },
+    setDanmakuData: function (data) {
+        danmakuList = data;
+        renderPopup(true);
     }
 };
 
 // Expose the manager to window
 window.danmakuManager = DanmakuManager;
+
+// Clean up console logs to only show important information
+const CLEAN_LOGS = true; // Set to true to enable clean logging
+
+function cleanLog(...args) {
+    if (CLEAN_LOGS) console.log('🍥', ...args);
+}
 
 function debugLog(...args) {
     if (DEBUG) console.log('🍥', ...args);
@@ -631,43 +642,59 @@ function renderPopup(show = true) {
 }
 
 async function processVideoMatch(ytData) {
+    if (!ytData) {
+        console.error('🍥 No YouTube video data to process');
+        return null;
+    }
+
+    // cleanLog('Processing new video:', ytData.title);
+
     try {
-        const searchResults = await searchBili(ytData.title, ytData.channelName);
-        if (!searchResults || searchResults.length === 0) {
-            debugLog('No Bilibili videos found');
+        // Get Bilibili videos matching the YouTube title
+        const biliResults = await searchBili(ytData.fullTitle, ytData.channelName);
+
+        if (!biliResults || biliResults.length === 0) {
+            cleanLog('No matching Bilibili videos found');
             return null;
         }
 
-        // Get detailed info for each result
-        const detailedResults = await Promise.all(
-            searchResults.map(async (result) => {
-                const details = await getBilibiliVideoDetails(result.bvid);
-                return details ? { ...result, ...details } : null;
-            })
-        );
+        // cleanLog('Found matching Bilibili videos:', biliResults.length);
 
-        // Filter out null results and find best match
-        const validResults = detailedResults.filter(Boolean);
-        const bestMatch = findBestMatch(ytData, validResults);
+        // Find best match
+        const bestMatch = findBestMatch(ytData, biliResults);
 
-        if (bestMatch) {
-            debugLog('Found matching Bilibili video:', bestMatch);
-
-            // Fetch danmaku immediately after finding a match
-            if (bestMatch.cid) {
-                const fetchedDanmaku = await fetchDanmaku(bestMatch.cid);
-                if (fetchedDanmaku) {
-                    danmakuList = fetchedDanmaku;
-                }
-            }
-
-            return bestMatch;
+        if (!bestMatch) {
+            cleanLog('No suitable match found among results');
+            return null;
         }
 
-        debugLog('No suitable match found');
-        return null;
+        // cleanLog('Found matching Bilibili video:', bestMatch);
+
+        // Get detailed info including CID
+        const videoDetails = await getBilibiliVideoDetails(bestMatch.bvid);
+
+        if (!videoDetails || !videoDetails.cid) {
+            cleanLog('Could not get Bilibili video details or CID');
+            return bestMatch; // Return the match even without CID
+        }
+
+        // Update bestMatch with CID
+        bestMatch.cid = videoDetails.cid;
+
+        // Fetch danmaku using the CID
+        const danmakuList = await fetchDanmaku(videoDetails.cid);
+
+        if (!danmakuList || danmakuList.length === 0) {
+            cleanLog('No danmaku found for video');
+            return bestMatch; // Return the match even without danmaku
+        }
+
+        // Store the danmaku data
+        window.danmakuManager.setDanmakuData(danmakuList);
+
+        return bestMatch;
     } catch (error) {
-        debugError('Error in processVideoMatch:', error);
+        console.error('🍥 Error in processVideoMatch:', error);
         return null;
     }
 }
@@ -724,40 +751,67 @@ async function waitForYouTubeInit(maxRetries = 5) {
     throw new Error('Failed to initialize YouTube video data after multiple attempts');
 }
 
-async function main() {
+// Add this function near the top after imports
+async function handleVideoChange(newVideoId) {
+    debugLog('Video changed, reinitializing with new video ID:', newVideoId);
+
+    // Full cleanup of old state
+    cleanupUI(true);
+
+    // Reset critical state variables
+    matchedBiliData = null;
+    danmakuList = [];
+    currentOverlayState = false;
+    isCurrentlyInAd = false;
+    currentVideoId = newVideoId;
+
     try {
-        // Wait for YouTube to be fully initialized
+        // Wait for YouTube elements to be fully loaded
         const ytData = await waitForYouTubeInit();
         if (!ytData) {
             debugLog('Could not extract YouTube video data after waiting');
             return;
         }
 
-        const videoId = getYouTubeVideoId();
-        if (!videoId) {
-            debugLog('Could not get YouTube video ID');
-            return;
-        }
-
-        // Update current video ID
-        currentVideoId = videoId;
+        debugLog('Processing new video:', ytData.title);
 
         // Process video match
         matchedBiliData = await processVideoMatch(ytData);
 
+        if (matchedBiliData) {
+            // Pre-fetch danmaku if we have a match
+            if (matchedBiliData.cid) {
+                const fetchedDanmaku = await fetchDanmaku(matchedBiliData.cid);
+                if (fetchedDanmaku) {
+                    danmakuList = fetchedDanmaku;
+                }
+            } else if (matchedBiliData.bvid) {
+                // If no CID but have BVID, get details first
+                const details = await getBilibiliVideoDetails(matchedBiliData.bvid);
+                if (details?.cid) {
+                    matchedBiliData.cid = details.cid;
+                    const fetchedDanmaku = await fetchDanmaku(details.cid);
+                    if (fetchedDanmaku) {
+                        danmakuList = fetchedDanmaku;
+                    }
+                }
+            }
+        }
+
         // Show popup with results
         renderPopup();
     } catch (error) {
-        debugError('Error in main:', error);
+        debugError('Error handling video change:', error);
     }
 }
 
+// Update the observer setup in init()
 async function init() {
     debugLog('Initializing content script');
     await loadSettings();
     setupSettingsPanel();
 
-    // Update the message listener for settings updates
+    // Add message listener for settings updates
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (message.type === 'UPDATE_DANMAKU_SETTINGS') {
             debugLog('Received settings update:', message.settings);
@@ -805,66 +859,86 @@ async function init() {
     let lastVideoId = currentVideoId;
     let initializationInProgress = false;
 
-    // Initial run with retry
-    await main().catch(debugError);
+    // Initial run
+    const initialVideoId = getYouTubeVideoId();
+    if (initialVideoId) {
+        await handleVideoChange(initialVideoId);
+    }
 
-    // Watch for navigation between videos
-    const observer = new MutationObserver(async () => {
-        // Prevent multiple simultaneous initialization attempts
-        if (initializationInProgress) {
-            return;
-        }
+    // Create a more robust observer for video changes
+    const videoChangeObserver = new MutationObserver(async (mutations) => {
+        if (initializationInProgress) return;
 
         try {
-            // Check if URL has changed
-            if (window.location.href !== lastCheckedUrl) {
-                lastCheckedUrl = window.location.href;
-                const newVideoId = getYouTubeVideoId();
+            const currentUrl = window.location.href;
+            const newVideoId = getYouTubeVideoId();
 
-                // Only proceed if we have a valid video ID and it's different from the last one
+            // Check if we've actually changed videos
+            if (currentUrl !== lastCheckedUrl || newVideoId !== lastVideoId) {
+                lastCheckedUrl = currentUrl;
+
+                // Only proceed if we have a valid video ID and it's different
                 if (newVideoId && newVideoId !== lastVideoId) {
-                    debugLog('Video changed, cleaning up and reinitializing');
                     lastVideoId = newVideoId;
-
-                    // Set initialization flag
                     initializationInProgress = true;
 
-                    // Full cleanup of old state
-                    cleanupUI(true);
-
-                    // Reset critical state variables
-                    matchedBiliData = null;
-                    danmakuList = [];
-                    currentOverlayState = false;
-                    isCurrentlyInAd = false;
-
-                    // Wait for YouTube to be ready
-                    await main();
+                    await handleVideoChange(newVideoId);
                 }
             }
         } catch (error) {
-            debugError('Error during video change handling:', error);
+            debugError('Error in video change observer:', error);
         } finally {
             initializationInProgress = false;
         }
     });
 
-    // Observe changes to the document body and title
-    observer.observe(document.body, {
+    // Observe both body and head for changes
+    videoChangeObserver.observe(document.body, {
         childList: true,
         subtree: true,
         attributes: true,
         attributeFilter: ['src', 'href']
     });
 
-    // Also observe the title element for changes
+    // Also observe the title element
     const titleElement = document.querySelector('title');
     if (titleElement) {
-        observer.observe(titleElement, {
+        videoChangeObserver.observe(titleElement, {
             childList: true,
             characterData: true,
             subtree: true
         });
+    }
+
+    // Add URL change detection using History API
+    const originalPushState = history.pushState;
+    const originalReplaceState = history.replaceState;
+
+    history.pushState = function () {
+        originalPushState.apply(this, arguments);
+        checkForVideoChange();
+    };
+
+    history.replaceState = function () {
+        originalReplaceState.apply(this, arguments);
+        checkForVideoChange();
+    };
+
+    window.addEventListener('popstate', checkForVideoChange);
+
+    async function checkForVideoChange() {
+        if (initializationInProgress) return;
+
+        const newVideoId = getYouTubeVideoId();
+        if (newVideoId && newVideoId !== lastVideoId) {
+            lastVideoId = newVideoId;
+            initializationInProgress = true;
+            try {
+                await handleVideoChange(newVideoId);
+            } finally {
+                initializationInProgress = false;
+            }
+        }
     }
 }
 

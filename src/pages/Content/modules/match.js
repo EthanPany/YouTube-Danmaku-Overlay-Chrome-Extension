@@ -1,12 +1,12 @@
 import { compareTwoStrings } from 'string-similarity';
-import { s2t } from 'chinese-s2t';
+import { sify } from 'chinese-conv/dist';
 
 // Helper function to clean and normalize text for Chinese content
 function normalizeText(text) {
     if (!text) return '';
 
-    // Convert to simplified Chinese
-    const simplified = s2t(text);
+    // Convert traditional to simplified Chinese
+    const simplified = sify(text);
 
     return simplified
         .toLowerCase()
@@ -21,33 +21,91 @@ function normalizeText(text) {
 function splitIntoTokens(text) {
     if (!text) return new Set();
 
-    // Match Chinese characters individually and English words
-    const tokens = text.match(/[\u4e00-\u9fff]|[a-zA-Z]+/g) || [];
-    return new Set(tokens);
+    // Create character-level tokens for Chinese text (each character is a token)
+    const chineseTokens = Array.from(text.match(/[\u4e00-\u9fa5]/g) || []);
+
+    // Create word-level tokens for non-Chinese text
+    const nonChineseText = text.replace(/[\u4e00-\u9fa5]/g, ' ');
+    const nonChineseTokens = nonChineseText
+        .toLowerCase()
+        .replace(/[^\w\s]/g, '') // Remove punctuation
+        .split(/\s+/)
+        .filter(token => token.length > 0);
+
+    // Combine both token types
+    const combinedTokens = [...chineseTokens, ...nonChineseTokens];
+
+    // Also add character bigrams for Chinese text to improve matching
+    for (let i = 0; i < chineseTokens.length - 1; i++) {
+        combinedTokens.push(chineseTokens[i] + chineseTokens[i + 1]);
+    }
+
+    return new Set(combinedTokens);
 }
 
 // Calculate similarity between two texts using both character overlap and string similarity
 function calculateTextSimilarity(text1, text2) {
     if (!text1 || !text2) return 0;
 
-    // Normalize texts
-    const cleanText1 = normalizeText(text1);
-    const cleanText2 = normalizeText(text2);
+    // Normalize the texts
+    const clean1 = normalizeText(text1);
+    const clean2 = normalizeText(text2);
 
-    // Calculate character-based overlap
-    const tokens1 = splitIntoTokens(cleanText1);
-    const tokens2 = splitIntoTokens(cleanText2);
+    if (clean1 === clean2) return 1.0; // Exact match
+    if (clean1.length === 0 || clean2.length === 0) return 0;
 
-    const commonTokens = [...tokens1].filter(token => tokens2.has(token));
-    const overlapRatio1 = commonTokens.length / tokens1.size;
-    const overlapRatio2 = commonTokens.length / tokens2.size;
-    const overlapScore = Math.max(overlapRatio1, overlapRatio2);
+    // For Chinese text, use token-based approach for better results
+    const tokens1 = splitIntoTokens(clean1);
+    const tokens2 = splitIntoTokens(clean2);
 
-    // Calculate string similarity score
-    const similarityScore = compareTwoStrings(cleanText1, cleanText2);
+    // Calculate word overlap (Jaccard similarity)
+    const set1 = new Set(tokens1);
+    const set2 = new Set(tokens2);
 
-    // Return weighted combination
-    return (overlapScore * 0.6) + (similarityScore * 0.4);
+    // Find intersection
+    const intersection = [...set1].filter(token => set2.has(token));
+
+    // Calculate Jaccard similarity coefficient
+    const jaccard = intersection.length / (set1.size + set2.size - intersection.length);
+
+    // For short texts, combine with character-level similarity
+    if (clean1.length < 10 || clean2.length < 10) {
+        // Use Levenshtein distance for character-level similarity
+        const levenshtein = calculateLevenshteinSimilarity(clean1, clean2);
+        // Weighted average of token-based and character-based similarity
+        return 0.7 * jaccard + 0.3 * levenshtein;
+    }
+
+    return jaccard;
+}
+
+// Helper function to calculate Levenshtein-based similarity
+function calculateLevenshteinSimilarity(str1, str2) {
+    // Calculate Levenshtein distance
+    const matrix = Array(str2.length + 1).fill(null)
+        .map(() => Array(str1.length + 1).fill(null));
+
+    for (let i = 0; i <= str1.length; i++) {
+        matrix[0][i] = i;
+    }
+    for (let j = 0; j <= str2.length; j++) {
+        matrix[j][0] = j;
+    }
+
+    for (let j = 1; j <= str2.length; j++) {
+        for (let i = 1; i <= str1.length; i++) {
+            const indicator = str1[i - 1] === str2[j - 1] ? 0 : 1;
+            matrix[j][i] = Math.min(
+                matrix[j][i - 1] + 1,
+                matrix[j - 1][i] + 1,
+                matrix[j - 1][i - 1] + indicator
+            );
+        }
+    }
+
+    const distance = matrix[str2.length][str1.length];
+    const maxLength = Math.max(str1.length, str2.length);
+    return maxLength === 0 ? 1 : 1 - distance / maxLength;
 }
 
 // Helper function to parse duration string (e.g., "14:53" to seconds)
@@ -102,6 +160,13 @@ function extractAuthorInfo(videoData) {
     };
 }
 
+// Clean up console logs to only show important information
+const CLEAN_LOGS = true; // Set to true to enable clean logging
+
+function cleanLog(...args) {
+    if (CLEAN_LOGS) console.log('🍥', ...args);
+}
+
 // Main matching function
 export function findBestMatch(ytData, biliResults) {
     if (!ytData || !biliResults || biliResults.length === 0) {
@@ -121,21 +186,33 @@ export function findBestMatch(ytData, biliResults) {
     const ytAuthorInfo = extractAuthorInfo(ytData);
     const cleanYtTitle = normalizeText(ytData.title.replace(/[【「『].*?[】」』]|\(.*?\)/g, ''));
 
+    // Collect all results with scores to sort later
+    const scoredResults = [];
+
     for (const biliVideo of biliResults) {
         const biliAuthorInfo = extractAuthorInfo(biliVideo);
         const cleanBiliTitle = normalizeText(biliVideo.title.replace(/[【「『].*?[】」』]|\(.*?\)/g, ''));
 
-        // Calculate similarities
+        // Calculate similarities using token-based approach for better Chinese text matching
         const authorSimilarity = calculateTextSimilarity(
             ytAuthorInfo.combinedAuthorInfo,
             biliAuthorInfo.combinedAuthorInfo
         );
+
         const titleSimilarity = calculateTextSimilarity(cleanYtTitle, cleanBiliTitle);
         const durationSimilarity = calculateDurationSimilarity(ytData.duration, biliVideo.duration);
 
-        // Bonus points for exact author matches or very similar titles
-        const authorBonus = authorSimilarity > 0.8 ? 0.1 : 0;
-        const titleBonus = titleSimilarity > 0.7 ? 0.1 : 0;
+        // Enhanced bonus for significant author or channel name matches
+        let authorBonus = 0;
+        if (authorSimilarity > 0.8) {
+            authorBonus = 0.15; // Increased bonus for very similar author
+        } else if (ytAuthorInfo.channelName && biliAuthorInfo.channelName &&
+            calculateTextSimilarity(ytAuthorInfo.channelName, biliAuthorInfo.channelName) > 0.7) {
+            authorBonus = 0.1; // Bonus for similar channel names
+        }
+
+        // Enhanced bonus for significant title matches
+        const titleBonus = titleSimilarity > 0.6 ? 0.15 : 0;
 
         // Calculate weighted final score with bonuses
         const finalScore = Math.min(1.0, (
@@ -145,35 +222,53 @@ export function findBestMatch(ytData, biliResults) {
             authorBonus + titleBonus
         ));
 
-        // Debug logging
-        console.log(`🍥 Matching "${biliVideo.title}" \n` +
-            `   Author Similarity: ${(authorSimilarity * 100).toFixed(1)}% \n` +
-            `   Title Similarity: ${(titleSimilarity * 100).toFixed(1)}% \n` +
-            `   Duration Similarity: ${(durationSimilarity * 100).toFixed(1)}% \n` +
-            `   Bonuses: Author +${(authorBonus * 100).toFixed(1)}%, Title +${(titleBonus * 100).toFixed(1)}% \n` +
-            `   Final Score: ${(finalScore * 100).toFixed(1)}%`);
+        // Store this result with its score
+        scoredResults.push({
+            video: biliVideo,
+            score: finalScore,
+            authorSimilarity,
+            titleSimilarity,
+            durationSimilarity,
+            authorBonus,
+            titleBonus
+        });
 
         if (finalScore > bestScore) {
             bestScore = finalScore;
             bestMatch = biliVideo;
-            console.log('🍥 New best match! Score:', `${(finalScore * 100).toFixed(1)}%`);
         }
     }
 
-    // Lower threshold and consider duration as a strong factor
-    const MIN_SCORE_THRESHOLD = 0.25; // 25% overall match
+    // Sort results by score (descending)
+    scoredResults.sort((a, b) => b.score - a.score);
+
+    // Log only the top 5 results
+    cleanLog("Top Bilibili search results:");
+    for (let i = 0; i < Math.min(5, scoredResults.length); i++) {
+        const result = scoredResults[i];
+        cleanLog(`${i + 1}. "${result.video.title}" (Score: ${(result.score * 100).toFixed(1)}%, ` +
+            `Title: ${(result.titleSimilarity * 100).toFixed(1)}%, ` +
+            `Author: ${(result.authorSimilarity * 100).toFixed(1)}%)`);
+    }
+
+    // Log the best match if found
+    if (bestMatch) {
+        cleanLog(`Final match: "${bestMatch.title}" with score ${(bestScore * 100).toFixed(1)}%`);
+    }
+
+    // Lower threshold for acceptance to accommodate traditional/simplified conversion issues
+    const MIN_SCORE_THRESHOLD = 0.20; // 20% overall match
     const DURATION_BOOST_THRESHOLD = 0.95; // 95% duration similarity
 
     // Accept match if score is good enough or if duration is very similar and score is reasonable
     if (bestMatch) {
         const bestDurationSimilarity = calculateDurationSimilarity(ytData.duration, bestMatch.duration);
         if (bestScore >= MIN_SCORE_THRESHOLD ||
-            (bestDurationSimilarity >= DURATION_BOOST_THRESHOLD && bestScore >= 0.2)) {
+            (bestDurationSimilarity >= DURATION_BOOST_THRESHOLD && bestScore >= 0.15)) {
             return bestMatch;
         }
     }
 
-    console.log('🍥 No suitable match found. Consider adjusting thresholds.');
     return null;
 }
 

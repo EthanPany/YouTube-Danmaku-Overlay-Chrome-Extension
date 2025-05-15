@@ -1,3 +1,12 @@
+import { sify } from 'chinese-conv/dist';  // Import Simplified Chinese converter
+
+// Clean up console logs to only show important information
+const CLEAN_LOGS = true; // Set to true to enable clean logging
+
+function cleanLog(...args) {
+    if (CLEAN_LOGS) console.log('🍥', ...args);
+}
+
 /**
  * Sends a message to the background script to fetch Bilibili API data.
  * @param {string} url The API URL to fetch.
@@ -7,7 +16,7 @@
  */
 function sendMessageToBackground(url, method = 'GET', body = null) {
     return new Promise((resolve, reject) => {
-        chrome.runtime.sendMessage({ type: 'FETCH_BILI_API', url, method, body }, (response) => {
+        chrome.runtime.sendMessage({ action: 'fetch', url, method, body }, (response) => {
             if (chrome.runtime.lastError) {
                 console.error('🍥 Error sending message to background:', chrome.runtime.lastError.message);
                 reject(new Error(chrome.runtime.lastError.message));
@@ -26,86 +35,110 @@ function sendMessageToBackground(url, method = 'GET', body = null) {
 }
 
 /**
- * Searches Bilibili for videos matching the keyword using the background script.
- * @param {string} keyword The search keyword (e.g., video title).
- * @param {string} channelName The name of the channel.
- * @returns {Promise<Array<object>|null>} A promise that resolves to an array of top 5 search results or null on error.
+ * Convert text to simplified Chinese with error handling
+ */
+function toSimplifiedChinese(text) {
+    if (!text) return '';
+    try {
+        return sify(text);
+    } catch (error) {
+        console.error('🍥 Error converting to Simplified Chinese:', error);
+        return text;
+    }
+}
+
+/**
+ * Searches for videos on Bilibili matching the YouTube title and channel.
+ * @param {string} keyword The YouTube video title to search for.
+ * @param {string} channelName The YouTube channel name (for additional context).
+ * @returns {Promise<Array<object>|null>} A promise that resolves to an array of Bilibili video results.
  */
 export async function searchBili(keyword, channelName) {
-    const searchUrl = `https://api.bilibili.com/x/web-interface/search/type?search_type=video&keyword=${encodeURIComponent(keyword)}`;
-
     try {
-        const data = await sendMessageToBackground(searchUrl);
+        // Convert title to simplified Chinese if it's in traditional Chinese
+        let searchKeyword = keyword;
+        try {
+            searchKeyword = toSimplifiedChinese(keyword);
+            // cleanLog('Search query (converted to Simplified Chinese):', searchKeyword);
+        } catch (error) {
+            console.error('🍥 Error converting keyword to Simplified Chinese:', error);
+        }
 
-        if (data.code !== 0) {
-            console.error('🍥 Bilibili search API returned error code:', data.code, data.message);
+        // Construct search URL
+        const encodedKeyword = encodeURIComponent(searchKeyword);
+        const apiUrl = `https://api.bilibili.com/x/web-interface/search/all/v2?keyword=${encodedKeyword}&page=1`;
+
+        // Use background script to fetch data from Bilibili API
+        const searchResults = await sendMessageToBackground(apiUrl);
+
+        if (!searchResults || !searchResults.data || !searchResults.data.result) {
+            console.error('🍥 Invalid search results from Bilibili API');
             return null;
         }
 
-        if (!data.data || !data.data.result) {
-            console.log('🍥 No search results found on Bilibili for:', keyword);
-            return [];
+        // Extract video results from the search data
+        let videoResults = [];
+
+        // Find video results in the results array
+        const videoResultSection = searchResults.data.result.find(
+            section => section.result_type === 'video'
+        );
+
+        if (videoResultSection && videoResultSection.data) {
+            videoResults = videoResultSection.data;
+            console.log('🍥 Raw search results from Bilibili:', videoResults);
         }
 
-        // Filter and score results
-        const scoredResults = data.data.result
-            .map(item => {
-                // Clean up the title
-                const cleanTitle = item.title.replace(/<em class=\"keyword\">|<\/em>/g, '');
+        // Filter and map video results to a simpler format
+        return videoResults
+            .filter(video => {
+                // Calculate title similarity
+                const titleSimilarity = calculateSimilarity(
+                    toSimplifiedChinese(video.title.replace(/<em.*?>(.*?)<\/em>/g, '$1')),
+                    toSimplifiedChinese(searchKeyword)
+                );
 
-                // Calculate base similarity scores
-                const titleSimilarity = calculateSimilarity(cleanTitle, keyword);
-                const authorSimilarity = calculateSimilarity(item.author, channelName);
+                // Calculate author similarity
+                const authorSimilarity = calculateSimilarity(
+                    toSimplifiedChinese(video.author || ''),
+                    toSimplifiedChinese(channelName || '')
+                );
 
-                // Scoring system:
-                // - Title similarity (0-1) * 0.6
-                // - Author similarity (0-1) * 0.4
-                // This gives more weight to title matches but still considers author matches
-                const score = (titleSimilarity * 0.6) + (authorSimilarity * 0.4);
+                // Only accept videos with acceptable similarity
+                const score = (titleSimilarity * 0.65) + (authorSimilarity * 0.35);
 
-                return {
-                    ...item,
-                    score,
-                    titleSimilarity,
-                    authorSimilarity
-                };
+                // Log the detailed scoring process for each video
+                // console.log(`🍥 Scoring result:
+                //     Original Title: ${video.title}
+                //     Simplified Title: ${toSimplifiedChinese(video.title.replace(/<em.*?>(.*?)<\/em>/g, '$1'))}
+                //     Original Author: ${video.author}
+                //     Simplified Author: ${toSimplifiedChinese(video.author || '')}
+                //     Title Similarity: ${titleSimilarity}
+                //     Author Similarity: ${authorSimilarity}
+                //     Score: ${score}`);
+
+                // Log the filtering decision
+                // console.log(`🍥 Filtering decision for "${toSimplifiedChinese(video.title.replace(/<em.*?>(.*?)<\/em>/g, '$1'))}":
+                //     Score: ${score}
+                //     Title Similarity: ${titleSimilarity}
+                //     Author Similarity: ${authorSimilarity}
+                //     Accepted: ${score >= 0.1}`);
+
+                return score >= 0.1; // Minimum score threshold
             })
-            .filter(item => {
-                // Accept if either:
-                // 1. Overall score is good enough (>0.3)
-                // 2. Very high title similarity (>0.7)
-                // 3. Very high author similarity (>0.8)
-                return item.score > 0.3 ||
-                    item.titleSimilarity > 0.7 ||
-                    item.authorSimilarity > 0.8;
-            })
-            .sort((a, b) => b.score - a.score) // Sort by score descending
-            .slice(0, 5) // Take top 5
-            .map(item => ({
-                bvid: item.bvid,
-                aid: item.aid,
-                title: item.title.replace(/<em class=\"keyword\">|<\/em>/g, ''),
-                pic: item.pic ? (item.pic.startsWith('//') ? `https:${item.pic}` : item.pic) : null,
-                duration: item.duration,
-                author: item.author,
-                url: item.arcurl,
-                pubdate: item.pubdate,
-                view_count: item.play || 0
-            }));
-
-        if (scoredResults.length === 0) {
-            console.log('🍥 No matching Bilibili videos found after filtering');
-        } else {
-            console.log('🍥 Found matching Bilibili videos:', scoredResults.length);
-        }
-
-        return scoredResults;
+            .map(video => ({
+                bvid: video.bvid,
+                aid: video.aid,
+                title: toSimplifiedChinese(video.title.replace(/<em.*?>(.*?)<\/em>/g, '$1')),
+                pic: video.pic,
+                duration: video.duration,
+                author: video.author,
+                description: video.description
+            }))
+            .slice(0, 20); // Limit to top 20 results;
 
     } catch (error) {
-        console.error('🍥 Error during Bilibili search (via background):', error);
-        if (error && error.message && error.message.includes('412')) {
-            console.warn('🍥 Bilibili API likely returned 412 Precondition Failed (via background).');
-        }
+        console.error('🍥 Error searching Bilibili:', error);
         return null;
     }
 }

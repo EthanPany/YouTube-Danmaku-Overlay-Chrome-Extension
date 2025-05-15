@@ -1,3 +1,12 @@
+import { sify } from 'chinese-conv/dist';  // Import Simplified Chinese converter
+
+// Clean up console logs to only show important information
+const CLEAN_LOGS = true; // Set to true to enable clean logging
+
+function cleanLog(...args) {
+    if (CLEAN_LOGS) console.log('🍥', ...args);
+}
+
 /**
  * Extracts video metadata from the YouTube page.
  * @returns {object|null} An object with title, channel name, and duration, or null if not found.
@@ -16,51 +25,67 @@ export function extractYouTubeVideoData() {
         }
 
         // Get fresh title, channel name, and duration
-        const fullTitle = titleElement.textContent.trim();
-        const rawChannelName = channelElement ? channelElement.textContent.trim() : '';
-        // Clean up channel name by removing extra whitespace and newlines
-        const channelName = rawChannelName.replace(/[\n\s]+/g, ' ').trim();
-        const duration = player.duration;
+        const fullTitle = titleElement.textContent?.trim() || '';
+        const channelName = channelElement?.textContent?.trim() || '';
+        const duration = player.duration || 0;
 
-        // Validate the data
-        if (!fullTitle || typeof duration !== 'number' || isNaN(duration)) {
-            console.log('Invalid video data:', { fullTitle, channelName, duration });
-            return null;
-        }
+        // Check if title contains Chinese
+        const containsChinese = (text) => /[\u4e00-\u9fa5]/.test(text);
 
-        // Try to extract Chinese title if available
+        // Try different patterns to extract Chinese title
+        const patterns = [
+            /【([^】]+)】/,  // Match text between 【】
+            /\[([^\]]+)\]/,  // Match text between []
+            /（([^）]+)）/,  // Match text between （）
+            /\(([^)]+)\)/,   // Match text between ()
+            /(.*?)(?:\s*#\w+)*/  // Match everything before hashtags
+        ];
+
         let title = fullTitle;
-        const bracketMatch = fullTitle.match(/【([^】]+)】/); // Match text between 【】
-        const squareBracketMatch = fullTitle.match(/\[([^\]]+)\]/); // Match text between []
-        const parenthesesMatch = fullTitle.match(/（([^）]+)）|\\(([^)]+)\\)/); // Match text between （） or ()
-        const hashtagMatch = fullTitle.match(/(.*?)(?:\s*#\w+)*/); // Remove hashtags from the end
+        let extractedChineseTitle = '';
 
-        // Clean up the title
-        if (hashtagMatch && hashtagMatch[1]) {
-            title = hashtagMatch[1].trim();
+        // Try each pattern to find Chinese text
+        for (const pattern of patterns) {
+            const match = fullTitle.match(pattern);
+            if (match && match[1]) {
+                const matchedText = match[1].trim();
+                if (containsChinese(matchedText)) {
+                    extractedChineseTitle = matchedText;
+                    break;
+                }
+            }
         }
 
-        // Prioritize Chinese title if found
-        if (bracketMatch && /[\u4e00-\u9fa5]/.test(bracketMatch[1])) {
-            title = bracketMatch[1];
-        } else if (squareBracketMatch && /[\u4e00-\u9fa5]/.test(squareBracketMatch[1])) {
-            title = squareBracketMatch[1];
-        } else if (parenthesesMatch && /[\u4e00-\u9fa5]/.test(parenthesesMatch[1] || parenthesesMatch[2])) {
-            title = parenthesesMatch[1] || parenthesesMatch[2];
+        // If no Chinese title found in brackets, check if the main title contains Chinese
+        if (!extractedChineseTitle && containsChinese(fullTitle)) {
+            // Remove hashtags and trim
+            extractedChineseTitle = fullTitle.replace(/#[\w\u4e00-\u9fa5]+/g, '').trim();
+        }
+
+        // Convert to simplified Chinese if we found a Chinese title
+        if (extractedChineseTitle) {
+            try {
+                title = sify(extractedChineseTitle);
+                // cleanLog('Converted title to Simplified Chinese:', title);
+            } catch (error) {
+                console.error('🍥 Error converting to Simplified Chinese:', error);
+                title = extractedChineseTitle;
+            }
         }
 
         const videoData = {
             title,
             fullTitle,
-            channelName,
+            channelName: containsChinese(channelName) ? sify(channelName) : channelName,
             duration,
             isSuspiciouslyShort: duration < 30
         };
 
-        console.log('Successfully extracted video data:', videoData);
+        // cleanLog('YouTube video data:', videoData.title, '(', videoData.fullTitle, ')');
         return videoData;
+
     } catch (error) {
-        console.error('Error extracting video data:', error);
+        console.error('Error extracting YouTube video data:', error);
         return null;
     }
 } 
