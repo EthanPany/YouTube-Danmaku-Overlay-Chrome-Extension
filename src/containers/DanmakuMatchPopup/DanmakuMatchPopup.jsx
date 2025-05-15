@@ -24,19 +24,17 @@ const baseStyles = {
         color: '#ccc',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
-        maxWidth: '150px',
-        wordBreak: 'break-all',
-        display: '-webkit-box',
-        WebkitLineClamp: 2,
-        WebkitBoxOrient: 'vertical',
-        lineHeight: '1.2',
+        whiteSpace: 'nowrap',
+        maxWidth: '120px',
+        display: 'inline-block'
     },
     contentStyles: {
         display: 'flex',
         gap: '10px',
         alignItems: 'flex-start',
         margin: 0,
-        padding: 0
+        padding: '0 0px 0 0',
+        position: 'relative',
     },
     thumbnailStyles: {
         width: '110px',
@@ -48,8 +46,8 @@ const baseStyles = {
     },
     closeButtonStyles: {
         position: 'absolute',
-        top: '6px',
-        right: '8px',
+        top: '2px',
+        right: '4px',
         background: 'transparent',
         border: 'none',
         color: '#aaa',
@@ -137,17 +135,43 @@ const videoInfoStyles = {
 };
 
 const titleStyles = {
-    fontWeight: '500', // Medium weight
+    fontWeight: '500',
     fontSize: '14px',
     color: '#f1f1f1',
     display: '-webkit-box',
-    WebkitLineClamp: 2, // Show 2 lines
+    WebkitLineClamp: 2,
     WebkitBoxOrient: 'vertical',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     lineHeight: '1.4',
-    maxHeight: 'calc(1.4em * 2)', // Corresponds to WebkitLineClamp * lineHeight
-    paddingRight: '12px', // Add padding to prevent overlap with close button
+    maxHeight: 'calc(1.4em * 2)',
+    paddingRight: '16px',
+    cursor: 'pointer',
+    transition: 'color 0.2s ease',
+    textDecoration: 'none'
+};
+
+const titleHoverStyles = {
+    ...titleStyles,
+    color: '#3498db'
+};
+
+const authorNameStyles = {
+    fontWeight: 'normal',
+    fontSize: '11px',
+    color: '#ccc',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    maxWidth: '120px',
+    display: 'inline-block',
+    cursor: 'pointer',
+    transition: 'color 0.2s ease'
+};
+
+const authorNameHoverStyles = {
+    ...authorNameStyles,
+    color: '#3498db'
 };
 
 const metadataContainerStyles = {
@@ -168,16 +192,13 @@ const metadataLineStyles = {
 };
 
 const danmakuCountStyles = {
-    fontSize: '13px',
-    color: '#fff',
+    fontSize: '11px',
+    color: '#aaa',
     display: 'inline-flex',
     alignItems: 'center',
-    padding: '2px 8px',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: '4px',
-    marginLeft: '8px',
+    marginRight: '8px',
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-    fontWeight: '500'
+    fontWeight: '400'
 };
 
 const metadataSeparator = {
@@ -257,6 +278,36 @@ const listIconStyle = (showSettings) => ({
     transform: `translate(-50%, -50%) ${showSettings ? 'rotate(0deg)' : 'rotate(-90deg)'}`,
 });
 
+const thumbnailContainerStyles = {
+    position: 'relative',
+    flexShrink: 0,
+    cursor: 'pointer',
+    width: '110px',
+    height: '62px',
+    borderRadius: '4px',
+    overflow: 'hidden'
+};
+
+const thumbnailOverlayStyles = {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    opacity: 0,
+    transition: 'opacity 0.2s ease',
+};
+
+const bilibiliIconStyles = {
+    fontSize: '24px',
+    color: '#fff',
+    textShadow: '0 0 10px rgba(0,0,0,0.5)'
+};
+
 function ensureHttpsUrl(url) {
     if (!url || typeof url !== 'string') return null;
     if (url.startsWith('//')) {
@@ -297,6 +348,8 @@ const DanmakuMatchPopup = ({ matchData, onShowDanmaku, onClosePopup, initialOver
     const [isCloseHovered, setIsCloseHovered] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
     const [isSettingsHovered, setIsSettingsHovered] = useState(false);
+    const [isTitleHovered, setIsTitleHovered] = useState(false);
+    const [isAuthorHovered, setIsAuthorHovered] = useState(false);
     const [settings, setSettings] = useState({
         fontSize: 24,
         speed: 48,
@@ -321,6 +374,24 @@ const DanmakuMatchPopup = ({ matchData, onShowDanmaku, onClosePopup, initialOver
         loadSettings();
     }, []);
 
+    // Load toggle state from storage on mount
+    useEffect(() => {
+        const loadToggleState = async () => {
+            try {
+                const result = await chrome.storage.local.get('youtubeDanmakuOverlayActive');
+                if (result.youtubeDanmakuOverlayActive !== undefined) {
+                    setIsActive(result.youtubeDanmakuOverlayActive);
+                    if (onShowDanmaku) {
+                        onShowDanmaku(result.youtubeDanmakuOverlayActive, matchData.cid || matchData.aid);
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading toggle state:', error);
+            }
+        };
+        loadToggleState();
+    }, []);
+
     // Dynamic styles that depend on state
     const dynamicStyles = {
         popupContainer: {
@@ -339,7 +410,7 @@ const DanmakuMatchPopup = ({ matchData, onShowDanmaku, onClosePopup, initialOver
             flexDirection: 'column',
             gap: '6px',
             border: '1px solid #444',
-            width: '340px',
+            width: '380px',
             transition: 'all 0.3s ease-in-out',
             maxHeight: showSettings ? '600px' : '200px',
             overflow: 'hidden',
@@ -390,14 +461,15 @@ const DanmakuMatchPopup = ({ matchData, onShowDanmaku, onClosePopup, initialOver
     }, [initialOverlayActive]);
 
     const handleToggle = (e) => {
-        e.stopPropagation(); // Prevent potential interference
-        e.preventDefault(); // Prevent default browser action for label/input click
+        e.stopPropagation();
+        e.preventDefault();
         const newState = !isActive;
-        // console.log(`🍥 Popup handleToggle: Called. Current isActive: ${isActive}, Setting internal state to: ${newState}`);
         setIsActive(newState);
+
+        // Save to local storage
+        chrome.storage.local.set({ youtubeDanmakuOverlayActive: newState });
+
         if (onShowDanmaku) {
-            // Pass the new state and necessary ID
-            // console.log(`🍥 Popup handleToggle: Calling parent onShowDanmaku with state: ${newState}`);
             onShowDanmaku(newState, matchData.cid || matchData.aid);
         }
     };
@@ -425,6 +497,18 @@ const DanmakuMatchPopup = ({ matchData, onShowDanmaku, onClosePopup, initialOver
         });
     };
 
+    const handleTitleClick = () => {
+        if (matchData.bvid) {
+            window.open(`https://www.bilibili.com/video/${matchData.bvid}`, '_blank');
+        }
+    };
+
+    const handleAuthorClick = () => {
+        if (matchData.owner?.mid) {
+            window.open(`https://space.bilibili.com/${matchData.owner.mid}`, '_blank');
+        }
+    };
+
     if (!matchData || isFullscreen) return null;
 
     return (
@@ -432,7 +516,8 @@ const DanmakuMatchPopup = ({ matchData, onShowDanmaku, onClosePopup, initialOver
             <button
                 style={{
                     ...baseStyles.closeButtonStyles,
-                    ...(isCloseHovered ? baseStyles.closeButtonHoverStyles : {})
+                    ...(isCloseHovered ? baseStyles.closeButtonHoverStyles : {}),
+                    backgroundColor: isCloseHovered ? 'rgba(255, 255, 255, 0.1)' : 'transparent'
                 }}
                 onClick={handleClose}
                 onMouseEnter={() => setIsCloseHovered(true)}
@@ -444,21 +529,66 @@ const DanmakuMatchPopup = ({ matchData, onShowDanmaku, onClosePopup, initialOver
 
             <div style={baseStyles.contentStyles}>
                 {videoThumbnail && (
-                    <img
-                        src={videoThumbnail}
-                        alt="Video thumbnail"
-                        style={baseStyles.thumbnailStyles}
-                        referrerPolicy="no-referrer"
-                    />
+                    <div
+                        style={thumbnailContainerStyles}
+                        onClick={handleTitleClick}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.querySelector('.thumbnail-overlay').style.opacity = '1';
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.querySelector('.thumbnail-overlay').style.opacity = '0';
+                        }}
+                    >
+                        <img
+                            src={videoThumbnail}
+                            alt="Video thumbnail"
+                            style={{
+                                width: '100%',
+                                height: '100%',
+                                objectFit: 'cover',
+                                border: '1px solid #555',
+                            }}
+                            referrerPolicy="no-referrer"
+                        />
+                        <div className="thumbnail-overlay" style={thumbnailOverlayStyles}>
+                            <i className="fa-brands fa-bilibili" style={bilibiliIconStyles}></i>
+                        </div>
+                    </div>
                 )}
                 <div style={videoInfoStyles}>
-                    <div style={titleStyles} title={matchData.title}>{matchData.title}</div>
+                    <div
+                        style={isTitleHovered ? titleHoverStyles : titleStyles}
+                        title={matchData.title}
+                        onClick={handleTitleClick}
+                        onMouseEnter={() => setIsTitleHovered(true)}
+                        onMouseLeave={() => setIsTitleHovered(false)}
+                    >
+                        {matchData.title}
+                    </div>
                     <div style={metadataContainerStyles}>
                         <div style={metadataLineStyles}>
-                            {authorFace && <img src={authorFace} alt={authorName} style={baseStyles.authorImageStyles} referrerPolicy="no-referrer" />}
-                            {authorFace && <span style={baseStyles.authorNameStyles} title={authorName}>{authorName}</span>}
+                            {authorFace && (
+                                <img
+                                    src={authorFace}
+                                    alt={authorName}
+                                    style={{ ...baseStyles.authorImageStyles, cursor: 'pointer' }}
+                                    referrerPolicy="no-referrer"
+                                    onClick={handleAuthorClick}
+                                />
+                            )}
+                            {authorFace && (
+                                <span
+                                    style={isAuthorHovered ? authorNameHoverStyles : authorNameStyles}
+                                    title={authorName}
+                                    onClick={handleAuthorClick}
+                                    onMouseEnter={() => setIsAuthorHovered(true)}
+                                    onMouseLeave={() => setIsAuthorHovered(false)}
+                                >
+                                    {authorName}
+                                </span>
+                            )}
                             {authorFace && <span style={metadataSeparator}>•</span>}
-                            <span>{matchData.duration || 'N/A'}</span>
+                            <span>{matchData.view_count ? `${formatCount(matchData.view_count)} views` : 'N/A'}</span>
                             <span style={metadataSeparator}>•</span>
                             <span>{publicationDate}</span>
                         </div>
@@ -491,22 +621,24 @@ const DanmakuMatchPopup = ({ matchData, onShowDanmaku, onClosePopup, initialOver
 
                 <div style={baseStyles.toggleContainer}>
                     <span style={toggleLabelStyles}>Danmaku Overlay</span>
-                    {danmakuCount > 0 && (
-                        <span style={danmakuCountStyles}>
-                            {formatCount(danmakuCount)} 弹幕
-                        </span>
-                    )}
-                    <label style={switchStyles}>
-                        <input
-                            type="checkbox"
-                            checked={isActive}
-                            onChange={handleToggle}
-                            style={switchInputStyles}
-                        />
-                        <span style={{ ...sliderStyles, ...(isActive ? checkedSliderStyles : {}) }}>
-                            <span style={{ ...sliderBeforeStyles, ...(isActive ? checkedSliderBeforeStyles : {}) }}></span>
-                        </span>
-                    </label>
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                        {danmakuCount > 0 && (
+                            <span style={danmakuCountStyles}>
+                                {formatCount(danmakuCount)} 弹幕
+                            </span>
+                        )}
+                        <label style={switchStyles}>
+                            <input
+                                type="checkbox"
+                                checked={isActive}
+                                onChange={handleToggle}
+                                style={switchInputStyles}
+                            />
+                            <span style={{ ...sliderStyles, ...(isActive ? checkedSliderStyles : {}) }}>
+                                <span style={{ ...sliderBeforeStyles, ...(isActive ? checkedSliderBeforeStyles : {}) }}></span>
+                            </span>
+                        </label>
+                    </div>
                 </div>
             </div>
 

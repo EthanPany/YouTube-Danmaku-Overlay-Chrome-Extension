@@ -14,6 +14,25 @@ const DanmakuSettings = ({ initialSettings, onSettingsChange }) => {
             ...settings,
             [key]: value
         };
+
+        // Special handling for text shadow and bold text
+        if (key === 'textShadow') {
+            newSettings.style = {
+                ...newSettings.style,
+                textShadow: value ? '-1px -1px #000, -1px 1px #000, 1px -1px #000, 1px 1px #000' : 'none',
+                lineWidth: value ? 2 : 0
+            };
+        }
+
+        if (key === 'fontWeight') {
+            const weight = value ? 'bold' : 'normal';
+            newSettings.fontWeight = weight;
+            newSettings.style = {
+                ...newSettings.style,
+                font: `${weight} ${newSettings.fontSize}px "Microsoft YaHei", "PingFang SC", "Helvetica Neue", Arial, sans-serif`
+            };
+        }
+
         setSettings(newSettings);
         if (onSettingsChange) {
             onSettingsChange(newSettings);
@@ -77,7 +96,7 @@ const DanmakuSettings = ({ initialSettings, onSettingsChange }) => {
                     <span className="value">{Math.round(settings.density * 100)}%</span>
                 </label>
             </div>
-
+            {/* 
             <div className="settings-group">
                 <label className="checkbox-label">
                     <input
@@ -85,7 +104,7 @@ const DanmakuSettings = ({ initialSettings, onSettingsChange }) => {
                         checked={settings.textShadow}
                         onChange={(e) => handleChange('textShadow', e.target.checked)}
                     />
-                    Text Shadow
+                    <span>Text Shadow</span>
                 </label>
             </div>
 
@@ -94,11 +113,11 @@ const DanmakuSettings = ({ initialSettings, onSettingsChange }) => {
                     <input
                         type="checkbox"
                         checked={settings.fontWeight === 'bold'}
-                        onChange={(e) => handleChange('fontWeight', e.target.checked ? 'bold' : 'normal')}
+                        onChange={(e) => handleChange('fontWeight', e.target.checked)}
                     />
-                    Bold Text
+                    <span>Bold Text</span>
                 </label>
-            </div>
+            </div> */}
         </div>
     );
 };

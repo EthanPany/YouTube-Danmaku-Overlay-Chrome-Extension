@@ -1,12 +1,12 @@
 import { compareTwoStrings } from 'string-similarity';
-import { sify } from 'chinese-conv';
+import { s2t } from 'chinese-s2t';
 
 // Helper function to clean and normalize text for Chinese content
 function normalizeText(text) {
     if (!text) return '';
 
     // Convert to simplified Chinese
-    const simplified = sify(text);
+    const simplified = s2t(text);
 
     return simplified
         .toLowerCase()

@@ -1,168 +1,123 @@
 # YouTube Danmaku Overlay (YouTube B站弹幕同步助手)
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE) <!-- Assuming MIT License, replace if different -->
+A Chrome extension that overlays Bilibili-style danmaku comments on YouTube videos. This extension automatically matches YouTube videos with their Bilibili counterparts and displays the danmaku comments in real-time.
 
-Bring the vibrant Bilibili-style danmaku (live scrolling comments) experience to your YouTube viewing! This Chrome extension fetches comments from corresponding Bilibili videos and overlays them onto the YouTube player, synchronized with video playback.
+## Features
 
-It's a fun project aimed at bridging the viewing experiences of two popular video platforms.
+- Automatic matching of YouTube videos with Bilibili content
+- Real-time danmaku overlay on YouTube videos
+- Customizable danmaku settings:
+  - Font size
+  - Speed
+  - Opacity
+  - Text shadow
+  - Density control
+- Ad-aware (automatically pauses during advertisements)
+- Responsive design that adapts to video player size
+- Support for both fullscreen and theater modes
+- Traditional/Simplified Chinese character support
 
-## **Demo**
-[![Demo GIF](https://media4.giphy.com/media/v1.Y2lkPTc5MGI3NjExNzRkb3VmaTN0Y3c5bHF1bnRjdGc0ZWYyY2xldjVpcTVwOGNrbnUyMyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/XbVEFTxQCoAPGUq98s/giphy.gif)](https://youtu.be/g9qKdpwL2Dc)
+## Installation
 
+### From Chrome Web Store
+1. Visit the Chrome Web Store (link coming soon)
+2. Click "Add to Chrome"
+3. Follow the installation prompts
 
-## ✨ Features
+### From Source
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/yourusername/youtube-danmaku-overlay.git
+   cd youtube-danmaku-overlay
+   ```
 
-*   **Automatic Video Matching**: Intelligently searches Bilibili for videos corresponding to the YouTube video you're watching, using title and duration matching.
-*   **Danmaku Overlay**: Displays Bilibili's iconic scrolling comments directly over the YouTube video player.
-*   **Real-time Synchronization**: Danmaku comments are precisely synced with YouTube video playback, including play, pause, and seek actions.
-*   **Seamless UI Integration**:
-    *   A discreet notification popup appears when a matching Bilibili video (and its danmaku) is found.
-    *   Danmaku display can be easily toggled on or off.
-*   **React-Powered Interface**: User interface components are built with React for a modern and responsive experience.
-*   **SPA Navigation Handling**: Smoothly handles YouTube's single-page application navigation, re-evaluating matches as you browse different videos.
-*   **Lightweight & Efficient**: Designed to be unobtrusive and performant.
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
 
-## ⚙️ How It Works (Briefly)
+3. Build the extension:
+   ```bash
+   npm run build
+   ```
 
-1.  **Metadata Extraction**: When you open a YouTube video, the extension extracts its title and duration.
-2.  **Bilibili Search**: It then queries the Bilibili API using the YouTube video's title to find potential matches.
-3.  **Matching Algorithm**: A similarity score (based on title and duration) helps select the best Bilibili match.
-4.  **Danmaku Fetch & Parse**: If a confident match is found, the extension fetches the danmaku comments (usually in XML format) for the Bilibili video and parses them.
-5.  **UI Injection & Rendering**: A React-based UI is injected:
-    *   A popup notifies you of the match and offers to show danmaku.
-    *   If enabled, an overlay is placed over the YouTube player.
-6.  **Danmaku Display**: The [CommentCoreLibrary](https://github.com/jabbany/CommentCoreLibrary) renders the scrolling comments on the overlay.
-7.  **Playback Sync**: The extension listens to YouTube player events (play, pause, seek, time updates) to keep the danmaku perfectly synchronized.
+4. Load the extension in Chrome:
+   - Open Chrome and navigate to `chrome://extensions/`
+   - Enable "Developer mode" in the top right
+   - Click "Load unpacked"
+   - Select the `build` directory from the project
 
-## 📂 Project Structure
+## Usage
 
-The project follows a structure common for React-based Chrome extensions:
+1. Navigate to any YouTube video
+2. The extension will automatically search for matching Bilibili videos
+3. If a match is found, danmaku comments will appear automatically
+4. Click the extension icon to:
+   - Adjust danmaku settings
+   - Toggle danmaku display
+   - View matching status
 
+## Development
+
+### Setup
+```bash
+# Install dependencies
+npm install
+
+# Start development build with watch mode
+npm start
+
+# Run tests
+npm test
+
+# Lint code
+npm run lint
+
+# Format code
+npm run format
 ```
-YouTube-Danmaku-Overlay-Chrome-Extension/
-├── .vscode/                  # VSCode editor settings
-├── build/                    # Output directory for the built extension (loaded into Chrome)
-├── src/                      # Source code
-│   ├── assets/               # Static assets (images, icons)
-│   │   └── img/
-│   ├── containers/           # React container components (typically stateful)
-│   │   ├── DanmakuMatchPopup/ # Component for the popup notifying of a Bilibili match
-│   │   └── Greetings/        # (Likely a placeholder/example from boilerplate)
-│   ├── pages/                # Core parts of the extension
-│   │   ├── Background/       # Background service worker scripts (for tasks like API calls if needed)
-│   │   ├── Content/          # Content script injected into YouTube pages - THE CORE LOGIC LIVES HERE
-│   │   │   └── modules/      # Modules for specific tasks (e.g., bilibili API, YouTube interaction, matching logic)
-│   │   ├── Devtools/         # (Boilerplate for custom Devtools panel, may not be used)
-│   │   ├── Newtab/           # (Boilerplate for new tab override, may not be used)
-│   │   ├── Options/          # Options page for user settings (e.g., matching threshold)
-│   │   ├── Panel/            # (Boilerplate for a panel, may not be used)
-│   │   └── Popup/            # UI for the browser action popup (if an extension icon popup is implemented)
-│   └── utils/                # Utility functions and helpers shared across the project
-├── zip/                      # Directory for zipped extension (for distribution)
-├── .babelrc                  # Babel configuration for transpiling JavaScript
-├── .eslintrc                 # ESLint configuration for code linting
-├── .gitignore                # Files and folders to be ignored by Git
-├── .prettierrc               # Prettier configuration for code formatting
-├── LICENSE                   # Project's open source license
-├── package-lock.json         # Precise, locked versions of npm dependencies
-├── package.json              # Project metadata, scripts, and dependencies
-├── project plan.md           # Detailed project planning document (The source of this README's info!)
-├── README.md                 # This file
-├── templete.md               # (Likely a template file from boilerplate)
-├── tsconfig.json             # TypeScript configuration (if the project uses TypeScript)
-└── webpack.config.js         # Webpack bundler configuration
+
+### Build for Production
+```bash
+# Clean build directory
+npm run clean
+
+# Build for production
+npm run build
+
+# Package for distribution
+npm run package
 ```
 
-**Key Directories for this Extension:**
+## Contributing
 
-*   `src/pages/Content/`: This is where the magic happens. The content script runs on YouTube video pages, extracts information, communicates with Bilibili, and injects the Danmaku UI.
-*   `src/pages/Content/modules/`: Contains the logic for:
-    *   Extracting YouTube video metadata.
-    *   Interacting with Bilibili APIs (search, fetching danmaku).
-    *   The matching algorithm to link YouTube videos to Bilibili counterparts.
-*   `src/containers/DanmakuMatchPopup/`: The React component responsible for the notification that appears when a Bilibili video match is found.
-*   `src/components/` (or similar, to be created): Will house other React components, such as the main `DanmakuOverlay.jsx` which renders the comments.
-*   `src/pages/Background/`: May be used for persistent tasks or to manage API calls if direct calls from the content script face limitations.
-*   `src/pages/Options/`: For any user-configurable settings (planned for future).
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-## 🚀 Getting Started
+## License
 
-Follow these steps to get the extension running on your local machine for development or testing.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-### Prerequisites
+## Acknowledgments
 
-*   **Node.js**: Version 16 or higher is recommended. You can download it from [nodejs.org](https://nodejs.org/).
-*   **npm**: Node Package Manager, which comes bundled with Node.js.
-*   **A Chromium-based Browser**: Google Chrome, Microsoft Edge, Brave, etc., that supports loading unpacked extensions.
+- [Danmaku](https://github.com/weizhenye/Danmaku) library by weizhenye
+- All the contributors to this project
+- The Bilibili and YouTube communities
 
-### Installation & Running
+## Support
 
-1.  **Clone the Repository:**
-    ```bash
-    git clone https://github.com/<your-github-username>/YouTube-Danmaku-Overlay-Chrome-Extension.git # Replace with actual repo URL
-    cd YouTube-Danmaku-Overlay-Chrome-Extension
-    ```
+If you encounter any issues or have questions, please:
+1. Check the [FAQ](docs/FAQ.md)
+2. Search existing [issues](https://github.com/yourusername/youtube-danmaku-overlay/issues)
+3. Create a new issue if needed
 
-2.  **Install Dependencies:**
-    Navigate to the project directory in your terminal and run:
-    ```bash
-    npm install
-    ```
+## Changelog
 
-3.  **Build the Extension:**
-    To compile the source code and prepare it for the browser, run:
-    ```bash
-    npm run build
-    ```
-    This command bundles the files and places them into the `build/` directory.
+See [CHANGELOG.md](CHANGELOG.md) for a list of changes.
 
-4.  **Load the Unpacked Extension in Your Browser:**
-    *   Open your Chromium-based browser (e.g., Chrome, Edge).
-    *   Navigate to the extensions page:
-        *   Chrome: `chrome://extensions`
-        *   Edge: `edge://extensions`
-    *   Enable **"Developer mode"**. This is usually a toggle switch in the top-right corner of the extensions page.
-    *   Click on the **"Load unpacked"** button.
-    *   In the file dialog, select the `build/` directory from this project.
+---
 
-5.  **Verify Installation:**
-    *   The YouTube Danmaku Overlay extension icon should appear in your browser's toolbar (you might need to pin it).
-    *   Navigate to any YouTube video. If the extension finds a corresponding Bilibili video with danmaku, a notification should appear on the page.
-
-## 🙏 Acknowledgements & Open Source Credits
-
-This project stands on the shoulders of giants and utilizes several fantastic open-source tools and resources:
-
-*   **Initial Boilerplate**: The project structure seems to be based on a Chrome extension boilerplate, potentially similar to [lxieyang/chrome-extension-boilerplate-react](https://github.com/lxieyang/chrome-extension-boilerplate-react), which provides a solid foundation for React-based extensions.
-*   **Danmaku Rendering**: Core danmaku display and animation are powered by the excellent [CommentCoreLibrary (CCL)](https://github.com/jabbany/CommentCoreLibrary). CCL is distributed under the MIT License.
-*   **String Similarity**: The video matching algorithm may use libraries such as [string-similarity](https://www.npmjs.com/package/string-similarity) to compare video titles.
-*   **Bilibili API Interaction**: Techniques for interacting with Bilibili's APIs, especially concerning necessary headers or cookies for search, are inspired by the community and projects like the [SearxNG metasearch engine](https://github.com/searxng/searxng) that document such interactions.
-
-A big thank you to the creators and maintainers of these projects!
-
-## 💡 Future Ideas
-
-This project is just getting started! Here are some potential future enhancements (many are detailed in the `project plan.md`):
-
-*   **Advanced Danmaku Display Algorithm**: Improve the rendering algorithm for smoother and more optimized danmaku display, potentially supporting more advanced comment types (e.g., top/bottom static comments).
-*   **Enhanced User Personalization**:
-    *   Allow users to customize text size and style for danmaku.
-    *   Provide options to adjust comment density.
-*   **Improved Loading & Stability**: Investigate and fix issues where the extension or danmaku might not load correctly on the initial page load without requiring a refresh.
-*   User-configurable settings (matching thresholds, comment appearance, filters).
-*   Advanced danmaku styling options (beyond basic personalization, e.g., color support).
-*   Manual search/override for Bilibili video selection.
-*   Improved multi-language support for video titles.
-*   Enhanced error handling and user feedback.
-
-Contributions and ideas are welcome!
-
-## 📄 License
-
-This project is licensed under the terms specified in the [LICENSE](./LICENSE) file. Please check the file for full details. (Likely MIT, but confirm with the `LICENSE` file).
-
-## Acknowledgements
-
-This project was bootstrapped with [Chrome Extension Boilerplate with React](https://github.com/lxieyang/chrome-extension-boilerplate-react).
-
-Danmaku (flying comments) functionality is powered by the [`weizhenye/Danmaku`](https://github.com/weizhenye/Danmaku) library. We are grateful for this excellent open-source project.
+Made with ❤️ for the bilibili and YouTube communities

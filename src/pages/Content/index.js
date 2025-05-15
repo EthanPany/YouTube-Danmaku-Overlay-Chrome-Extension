@@ -53,17 +53,27 @@ function debugError(...args) {
 
 async function loadSettings() {
     try {
+        if (!chrome?.storage?.local) {
+            debugLog('Chrome storage not available, using default settings');
+            currentSettings = { ...defaultSettings };
+            return;
+        }
         const result = await chrome.storage.local.get(SETTINGS_STORAGE_KEY);
         currentSettings = { ...defaultSettings, ...result[SETTINGS_STORAGE_KEY] };
         debugLog('Loaded settings:', currentSettings);
     } catch (error) {
-        debugError('Error loading settings:', error);
+        debugLog('Error loading settings, using defaults:', error);
         currentSettings = { ...defaultSettings };
     }
 }
 
 async function saveSettings(settings) {
     try {
+        if (!chrome?.storage?.local) {
+            debugLog('Chrome storage not available, settings not saved');
+            currentSettings = { ...defaultSettings, ...settings };
+            return;
+        }
         const newSettings = { ...defaultSettings, ...settings };
         await chrome.storage.local.set({ [SETTINGS_STORAGE_KEY]: newSettings });
         currentSettings = newSettings;
@@ -71,25 +81,10 @@ async function saveSettings(settings) {
 
         // Immediately apply new settings if danmaku is active
         if (danmakuInstance && currentOverlayState) {
-            danmakuInstance.clear();
-            danmakuInstance.speed = newSettings.speed;
-            danmakuInstance.opacity = newSettings.opacity;
-            danmakuInstance.fontSize = newSettings.fontSize;
-
-            // Update container opacity
-            const container = document.getElementById(DANMAKU_OVERLAY_ID);
-            if (container) {
-                container.style.opacity = newSettings.opacity;
-            }
-
-            // Reapply density by filtering comments
-            if (danmakuList.length > 0) {
-                const densityAdjustedComments = danmakuList.filter(() => Math.random() <= newSettings.density);
-                setupDanmakuOverlay(densityAdjustedComments);
-            }
+            updateDanmakuWithSettings();
         }
     } catch (error) {
-        debugError('Error saving settings:', error);
+        debugLog('Error saving settings:', error);
     }
 }
 
@@ -159,20 +154,9 @@ function getYouTubeVideoId() {
 }
 
 function isAdvertisement() {
-    // More specific ad detection
     const adOverlay = document.querySelector('.ytp-ad-player-overlay');
-    const skipButton = document.querySelector('.ytp-ad-skip-button-container');
-    const adText = document.querySelector('.ytp-ad-text');
-    const playerElement = document.querySelector('.html5-video-player');
-
-    // Check if any of these specific ad indicators are present
-    return Boolean(
-        adOverlay ||
-        skipButton ||
-        adText ||
-        playerElement?.classList.contains('ad-showing') ||
-        playerElement?.classList.contains('ad-interrupting')
-    );
+    const skipButton = document.querySelector('.ytp-ad-skip-button');
+    return !!(adOverlay || skipButton);
 }
 
 function cleanupDanmakuOverlay() {
@@ -223,7 +207,7 @@ function cleanupUI(fullReset = true) {
 function setupDanmakuOverlay(dList) {
     const videoElement = document.querySelector('video');
     if (!videoElement) {
-        debugLog('Video element not found');
+        console.log('Video element not found');
         return;
     }
 
@@ -232,16 +216,17 @@ function setupDanmakuOverlay(dList) {
     if (currentAdState !== isCurrentlyInAd) {
         isCurrentlyInAd = currentAdState;
         if (isCurrentlyInAd) {
-            debugLog('Advertisement detected, not showing danmaku');
+            console.log('Advertisement detected, pausing danmaku');
             cleanupDanmakuOverlay();
             return;
         } else {
-            debugLog('Advertisement ended, attempting to restore danmaku');
+            console.log('Advertisement ended, resuming danmaku');
         }
     }
 
     // Don't proceed if we're in an ad
     if (isCurrentlyInAd) {
+        console.log('Currently in advertisement, danmaku paused');
         return;
     }
 
@@ -275,10 +260,10 @@ function setupDanmakuOverlay(dList) {
                     if (newAdState !== isCurrentlyInAd) {
                         isCurrentlyInAd = newAdState;
                         if (isCurrentlyInAd) {
-                            debugLog('Advertisement started, hiding danmaku');
+                            console.log('Advertisement started, hiding danmaku');
                             cleanupDanmakuOverlay();
                         } else if (currentOverlayState && danmakuList.length > 0) {
-                            debugLog('Advertisement ended, restoring danmaku');
+                            console.log('Advertisement ended, restoring danmaku');
                             setupDanmakuOverlay(danmakuList);
                         }
                     }
@@ -305,19 +290,20 @@ function setupDanmakuOverlay(dList) {
     // Convert Bilibili comments to Danmaku format
     const comments = densityAdjustedComments.map(comment => {
         const fontSize = currentSettings.fontSize;
+        const fontWeight = currentSettings.fontWeight === 'bold' ? 'bold' : 'normal';
+        const textShadow = currentSettings.textShadow ? '-1px -1px #000, -1px 1px #000, 1px -1px #000, 1px 1px #000' : 'none';
 
         return {
             text: comment.text,
             mode: 'rtl',
             time: typeof comment.time === 'number' ? comment.time : comment.stime,
             style: {
-                fontSize: `${fontSize}px`,
+                font: `${fontWeight} ${fontSize}px "Microsoft YaHei", "PingFang SC", "Helvetica Neue", Arial, sans-serif`,
                 color: '#ffffff',
-                textShadow: currentSettings.textShadow ? '-1px -1px #000, -1px 1px #000, 1px -1px #000, 1px 1px #000' : 'none',
-                font: `${currentSettings.fontWeight} ${fontSize}px "Microsoft YaHei", "PingFang SC", "Helvetica Neue", Arial, sans-serif`,
+                textShadow: textShadow,
                 fillStyle: '#ffffff',
                 strokeStyle: '#000000',
-                lineWidth: 2
+                lineWidth: currentSettings.textShadow ? 2 : 0
             }
         };
     });
@@ -462,7 +448,7 @@ function renderPopup(show = true) {
 
 async function processVideoMatch(ytData) {
     try {
-        const searchResults = await searchBili(ytData.title);
+        const searchResults = await searchBili(ytData.title, ytData.channelName);
         if (!searchResults || searchResults.length === 0) {
             debugLog('No Bilibili videos found');
             return null;
