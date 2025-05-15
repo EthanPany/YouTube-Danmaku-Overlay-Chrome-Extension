@@ -165,4 +165,4 @@ Contributions and ideas are welcome!
 
 ## 📄 License
 
-This project is licensed under the terms specified in the [LICENSE](./LICENSE) file. Please check the file for full details. (Likely MIT, but confirm with the `LICENSE` file).
+This project is licensed under the terms specified in the [LICENSE](./LICENSE) file. Please check the file for full details. 
