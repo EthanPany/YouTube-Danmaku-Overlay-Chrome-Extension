@@ -6,7 +6,6 @@ const TerserPlugin = require('terser-webpack-plugin');
 const { CleanWebpackPlugin } = require('clean-webpack-plugin');
 
 const ASSET_PATH = process.env.ASSET_PATH || '/';
-const NODE_ENV = process.env.NODE_ENV || 'development';
 
 const fileExtensions = [
   'jpg',
@@ -22,7 +21,7 @@ const fileExtensions = [
 ];
 
 const options = {
-  mode: NODE_ENV,
+  mode: process.env.NODE_ENV || 'development',
   entry: {
     newtab: path.join(__dirname, 'src', 'pages', 'Newtab', 'index.jsx'),
     options: path.join(__dirname, 'src', 'pages', 'Options', 'index.jsx'),
@@ -82,9 +81,7 @@ const options = {
     new CleanWebpackPlugin({ verbose: false }),
     new webpack.ProgressPlugin(),
     new webpack.DefinePlugin({
-      'process.env': {
-        NODE_ENV: JSON.stringify(NODE_ENV)
-      }
+      'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV)
     }),
     new CopyWebpackPlugin({
       patterns: [
@@ -151,7 +148,7 @@ const options = {
     }),
   ],
   optimization: {
-    minimize: NODE_ENV === 'production',
+    minimize: process.env.NODE_ENV === 'production',
     minimizer: [new TerserPlugin({
       extractComments: false,
     })],
