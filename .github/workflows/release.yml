@@ -1,0 +1,89 @@
+name: Build and Release Chrome Extension
+
+on:
+  push:
+    branches:
+      - main  # Change this if your main branch has a different name
+    paths-ignore:
+      - 'README.md'
+      - 'docs/**'
+      - '.gitignore'
+
+jobs:
+  check-commit:
+    runs-on: ubuntu-latest
+    if: "contains(github.event.head_commit.message, '[release]')"
+    steps:
+      - run: echo "Release commit detected, proceeding with build and release"
+
+  build-and-release:
+    needs: check-commit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Check if package.json exists
+        id: check_package
+        run: |
+          if [ -f "package.json" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Error: package.json not found"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: |
+          # Remove package-lock.json if it exists to ensure clean install
+          rm -f package-lock.json
+          npm install
+
+      - name: Build extension
+        run: npm run build
+
+      - name: Get version from package.json
+        id: package_version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if [ -z "$VERSION" ]; then
+            echo "Error: No version found in package.json"
+            exit 1
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create ZIP file
+        run: |
+          cd build
+          zip -r ../YouTubeDanmakuOverlay.zip .
+
+      - name: Extract release notes
+        id: release_notes
+        run: |
+          # Get commit message and extract text between [release] and [/release] if present
+          COMMIT_MSG="${{ github.event.head_commit.message }}"
+          if [[ $COMMIT_MSG =~ \[release\](.*?)\[/release\] ]]; then
+            echo "notes=${BASH_REMATCH[1]}" >> $GITHUB_OUTPUT
+          else
+            echo "notes=Release based on commit: $COMMIT_MSG" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Release v${{ steps.package_version.outputs.version }}
+          tag_name: v${{ steps.package_version.outputs.version }}
+          body: ${{ steps.release_notes.outputs.notes }}
+          files: YouTubeDanmakuOverlay.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
