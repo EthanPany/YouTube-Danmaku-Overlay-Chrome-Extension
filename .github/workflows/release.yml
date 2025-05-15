@@ -9,6 +9,13 @@ on:
       - 'docs/**'
       - '.gitignore'
 
+# Add explicit permissions
+permissions:
+  contents: write
+  packages: write
+  issues: write
+  pull-requests: write
+
 jobs:
   check-commit:
     runs-on: ubuntu-latest
@@ -23,6 +30,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -43,16 +52,18 @@ jobs:
 
       - name: Install dependencies
         run: |
-          # Remove package-lock.json if it exists to ensure clean install
+          # Remove package-lock.json if exists
           rm -f package-lock.json
           # Install specific versions of problematic dependencies first
           npm install --save-exact ajv@8.12.0 ajv-keywords@5.1.0 copy-webpack-plugin@11.0.0
-          # Install remaining dependencies with legacy peer deps
+          # Install core React dependencies
+          npm install --save react@18 react-dom@18 prop-types danmaku
+          # Install remaining dependencies
           npm install --legacy-peer-deps
 
       - name: Build extension
         run: |
-          # Force clear node_modules/.cache before building
+          # Clear cache before building
           rm -rf node_modules/.cache
           npm run build
 
@@ -65,6 +76,8 @@ jobs:
             exit 1
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+          # Also set release date
+          echo "release_date=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
 
       - name: Create ZIP file
         run: |
@@ -74,20 +87,40 @@ jobs:
       - name: Extract release notes
         id: release_notes
         run: |
-          # Get commit message and extract text between [release] and [/release] if present
           COMMIT_MSG="${{ github.event.head_commit.message }}"
           if [[ $COMMIT_MSG =~ \[release\](.*?)\[/release\] ]]; then
-            echo "notes=${BASH_REMATCH[1]}" >> $GITHUB_OUTPUT
+            NOTES="${BASH_REMATCH[1]}"
           else
-            echo "notes=Release based on commit: $COMMIT_MSG" >> $GITHUB_OUTPUT
+            NOTES="Release based on commit: $COMMIT_MSG"
           fi
+          # Create a more detailed release body
+          BODY="## Release v${{ steps.package_version.outputs.version }} (${{ steps.package_version.outputs.release_date }})
+
+          ${NOTES}
+
+          ### Installation
+          1. Download the YouTubeDanmakuOverlay.zip file
+          2. Unzip the file
+          3. Go to chrome://extensions/
+          4. Enable Developer Mode
+          5. Click 'Load unpacked'
+          6. Select the unzipped folder
+
+          ### SHA-256 Checksum
+          \`\`\`
+          $(sha256sum YouTubeDanmakuOverlay.zip | cut -d' ' -f1)
+          \`\`\`
+          "
+          echo "body<<EOF" >> $GITHUB_OUTPUT
+          echo "$BODY" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: Release v${{ steps.package_version.outputs.version }}
           tag_name: v${{ steps.package_version.outputs.version }}
-          body: ${{ steps.release_notes.outputs.notes }}
+          body: ${{ steps.release_notes.outputs.body }}
           files: YouTubeDanmakuOverlay.zip
           draft: false
           prerelease: false
