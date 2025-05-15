@@ -45,6 +45,9 @@ jobs:
         run: |
           # Remove package-lock.json if it exists to ensure clean install
           rm -f package-lock.json
+          # Install core dependencies first
+          npm install --save react react-dom prop-types danmaku
+          # Install remaining dependencies
           npm install
 
       - name: Build extension
@@ -87,3 +90,4 @@ jobs:
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
+          
