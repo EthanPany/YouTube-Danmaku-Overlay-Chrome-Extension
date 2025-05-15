@@ -200,8 +200,7 @@
 
 .settings-group {
     background-color: #383838;
-    padding: 8px;
-    /* height: 50%; */
+    padding: 6px 8px;
     border-radius: 6px;
     transition: background-color 0.2s ease;
 }
@@ -212,10 +211,15 @@
 
 .settings-group label {
     display: flex;
-    flex-direction: column;
+    align-items: center;
     gap: 8px;
     color: #e0e0e0;
     font-size: 13px;
+    width: 100%;
+}
+
+.settings-group label>span:first-child {
+    min-width: 70px;
 }
 
 .settings-group .checkbox-label {
@@ -225,13 +229,13 @@
 }
 
 .settings-group input[type="range"] {
-    width: 100%;
+    flex: 1;
     height: 4px;
     background: #666;
     border-radius: 2px;
     outline: none;
     -webkit-appearance: none;
-    margin: 8px 0;
+    margin: 0;
 }
 
 .settings-group input[type="range"]::-webkit-slider-thumb {
@@ -256,5 +260,7 @@
 .settings-group .value {
     color: #aaa;
     font-size: 12px;
-    margin-left: auto;
+    min-width: 45px;
+    text-align: right;
+    margin: 0;
 }

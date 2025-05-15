@@ -73,7 +73,7 @@ const baseStyles = {
     controlsRowStyles: {
         display: 'flex',
         alignItems: 'center',
-        gap: '8px',
+        gap: '6px',
         padding: '0px',
         margin: 0,
         borderRadius: '6px',
@@ -81,9 +81,19 @@ const baseStyles = {
         boxSizing: 'border-box',
         backgroundColor: 'transparent'
     },
+    settingsButtonContainer: {
+        backgroundColor: '#383838',
+        padding: '3px',
+        borderRadius: '6px',
+        display: 'flex',
+        alignItems: 'center',
+        height: '28px',
+        margin: 0,
+        order: -1
+    },
     settingsButtonStyles: {
-        width: '30px',
-        height: '30px',
+        width: '28px',
+        height: '28px',
         borderRadius: '4px',
         backgroundColor: '#444',
         border: 'none',
@@ -95,32 +105,24 @@ const baseStyles = {
         justifyContent: 'center',
         transition: 'all 0.2s ease',
         padding: 0,
-        margin: 0
+        margin: 0,
+        position: 'relative',
+        overflow: 'hidden'
     },
     settingsButtonHoverStyles: {
         backgroundColor: '#555',
         color: '#fff',
     },
-    settingsButtonContainer: {
-        backgroundColor: '#383838',
-        padding: '4px',
-        borderRadius: '6px',
-        display: 'flex',
-        alignItems: 'center',
-        height: '30px',
-        margin: 0,
-        order: -1
-    },
     toggleContainer: {
         display: 'flex',
         alignItems: 'center',
-        gap: '8px',
+        gap: '6px',
         backgroundColor: '#383838',
         borderRadius: '6px',
-        padding: '4px 8px',
+        padding: '3px 8px',
         cursor: 'pointer',
         flexGrow: 1,
-        height: '30px',
+        height: '28px',
         margin: 0,
         justifyContent: 'space-between'
     }
@@ -234,6 +236,27 @@ const checkedSliderBeforeStyles = {
     transform: 'translateX(14px)',
 };
 
+// Add icon transition styles
+const iconStyles = {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    transform: 'translate(-50%, -50%)',
+    transition: 'all 0.3s ease',
+};
+
+const settingsIconStyle = (showSettings) => ({
+    ...iconStyles,
+    opacity: showSettings ? 0 : 1,
+    transform: `translate(-50%, -50%) ${showSettings ? 'rotate(90deg)' : 'rotate(0deg)'}`,
+});
+
+const listIconStyle = (showSettings) => ({
+    ...iconStyles,
+    opacity: showSettings ? 1 : 0,
+    transform: `translate(-50%, -50%) ${showSettings ? 'rotate(0deg)' : 'rotate(-90deg)'}`,
+});
+
 function ensureHttpsUrl(url) {
     if (!url || typeof url !== 'string') return null;
     if (url.startsWith('//')) {
@@ -306,7 +329,7 @@ const DanmakuMatchPopup = ({ matchData, onShowDanmaku, onClosePopup, initialOver
             right: '20px',
             backgroundColor: '#282828',
             color: '#e0e0e0',
-            padding: '12px 12px 8px 12px',
+            padding: '10px 10px 6px 10px',
             borderRadius: '8px',
             zIndex: '2147483647',
             boxShadow: '0 5px 15px rgba(0,0,0,0.3)',
@@ -314,7 +337,7 @@ const DanmakuMatchPopup = ({ matchData, onShowDanmaku, onClosePopup, initialOver
             fontSize: '13px',
             display: 'flex',
             flexDirection: 'column',
-            gap: '8px',
+            gap: '6px',
             border: '1px solid #444',
             width: '340px',
             transition: 'all 0.3s ease-in-out',
@@ -325,7 +348,7 @@ const DanmakuMatchPopup = ({ matchData, onShowDanmaku, onClosePopup, initialOver
         settingsPanel: {
             backgroundColor: '#383838',
             borderRadius: '6px',
-            marginTop: '4px',
+            marginTop: '2px',
             overflow: 'hidden',
             transition: 'all 0.3s ease-in-out',
             opacity: showSettings ? 1 : 0,
@@ -453,9 +476,16 @@ const DanmakuMatchPopup = ({ matchData, onShowDanmaku, onClosePopup, initialOver
                         onClick={() => setShowSettings(!showSettings)}
                         onMouseEnter={() => setIsSettingsHovered(true)}
                         onMouseLeave={() => setIsSettingsHovered(false)}
-                        title="Danmaku Settings"
+                        title={showSettings ? "Hide Settings" : "Show Settings"}
                     >
-                        <i className="fas fa-cog"></i>
+                        <i
+                            className="fas fa-cog"
+                            style={settingsIconStyle(showSettings)}
+                        />
+                        <i
+                            className="fas fa-chevron-down"
+                            style={listIconStyle(showSettings)}
+                        />
                     </button>
                 </div>
 

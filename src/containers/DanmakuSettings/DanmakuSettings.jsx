@@ -24,7 +24,7 @@ const DanmakuSettings = ({ initialSettings, onSettingsChange }) => {
         <div className="danmaku-settings">
             <div className="settings-group">
                 <label>
-                    Font Size
+                    <span>Font Size</span>
                     <input
                         type="range"
                         min="12"
@@ -38,7 +38,7 @@ const DanmakuSettings = ({ initialSettings, onSettingsChange }) => {
 
             <div className="settings-group">
                 <label>
-                    Speed
+                    <span>Speed</span>
                     <input
                         type="range"
                         min="24"
@@ -52,7 +52,7 @@ const DanmakuSettings = ({ initialSettings, onSettingsChange }) => {
 
             <div className="settings-group">
                 <label>
-                    Opacity
+                    <span>Opacity</span>
                     <input
                         type="range"
                         min="0"
@@ -66,7 +66,7 @@ const DanmakuSettings = ({ initialSettings, onSettingsChange }) => {
 
             <div className="settings-group">
                 <label>
-                    Density
+                    <span>Density</span>
                     <input
                         type="range"
                         min="10"
