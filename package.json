@@ -36,6 +36,7 @@
     "ajv": "8.12.0",
     "ajv-keywords": "5.1.0",
     "chinese-s2t": "^1.0.0",
+    "comment-core-library": "^0.11.1",
     "danmaku": "^2.0.8",
     "prop-types": "^15.8.1",
     "react": "^18.3.1",

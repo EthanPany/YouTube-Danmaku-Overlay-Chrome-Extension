@@ -10,6 +10,8 @@ const DanmakuSettings = ({ initialSettings, onSettingsChange }) => {
     }, [initialSettings]);
 
     const handleChange = (key, value) => {
+        // console.log(`Settings change - ${key}:`, value);
+
         const newSettings = {
             ...settings,
             [key]: value
@@ -34,6 +36,16 @@ const DanmakuSettings = ({ initialSettings, onSettingsChange }) => {
         }
 
         setSettings(newSettings);
+
+        // Update settings through window API
+        if (window.danmakuManager) {
+            window.danmakuManager.updateSettings({
+                type: key,
+                value: value
+            });
+        }
+
+        // Call the callback
         if (onSettingsChange) {
             onSettingsChange(newSettings);
         }

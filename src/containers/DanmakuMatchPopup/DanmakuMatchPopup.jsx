@@ -489,12 +489,20 @@ const DanmakuMatchPopup = ({ matchData, onShowDanmaku, onClosePopup, initialOver
     const publicationDate = formatDate(matchData.pubdate);
 
     const handleSettingsChange = (newSettings) => {
+        // Update local state immediately
         setSettings(newSettings);
-        // Save settings to storage and update danmaku
-        chrome.runtime.sendMessage({
-            type: 'SAVE_SETTINGS',
-            settings: newSettings
-        });
+
+        // Send message to content script immediately for real-time update
+        if (chrome.runtime && chrome.runtime.sendMessage) {
+            chrome.runtime.sendMessage({
+                type: 'UPDATE_DANMAKU_SETTINGS',
+                settings: newSettings
+            }).catch(error => console.error('Error sending settings update:', error));
+        }
+
+        // Save to storage in background
+        chrome.storage.local.set({ 'youtubeDanmakuSettings': newSettings })
+            .catch(error => console.error('Error saving settings:', error));
     };
 
     const handleTitleClick = () => {
@@ -659,13 +667,18 @@ DanmakuMatchPopup.propTypes = {
         cid: PropTypes.number,
         title: PropTypes.string,
         pic: PropTypes.string,
-        duration: PropTypes.string,
+        duration: PropTypes.oneOfType([
+            PropTypes.string,
+            PropTypes.number
+        ]),
         author: PropTypes.string,
         owner: PropTypes.shape({
             name: PropTypes.string,
             face: PropTypes.string,
+            mid: PropTypes.number
         }),
         pubdate: PropTypes.number,
+        view_count: PropTypes.number
     }),
     onShowDanmaku: PropTypes.func.isRequired,
     onClosePopup: PropTypes.func.isRequired,

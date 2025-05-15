@@ -25,6 +25,7 @@ let danmakuInstance = null;
 let danmakuList = [];
 let currentOverlayState = false;
 let isCurrentlyInAd = false;
+let debounceReinitTimer = null;
 
 // Default settings
 const defaultSettings = {
@@ -38,6 +39,94 @@ const defaultSettings = {
 
 // Current settings
 let currentSettings = { ...defaultSettings };
+
+// Add this near the top of the file, after the imports
+const DanmakuManager = {
+    updateSettings: function (update) {
+        // debugLog('Direct settings update:', update);
+
+        if (!danmakuInstance || !currentOverlayState) {
+            debugLog('No active danmaku instance');
+            return;
+        }
+
+        try {
+            const { type, value } = update;
+
+            // Update current settings
+            currentSettings[type] = value;
+
+            // Handle immediate updates
+            switch (type) {
+                case 'speed':
+                    danmakuInstance.speed = value;
+                    break;
+
+                case 'opacity':
+                    const overlayContainer = document.getElementById(DANMAKU_OVERLAY_ID);
+                    if (overlayContainer) {
+                        overlayContainer.style.opacity = value;
+                    }
+                    break;
+
+                case 'fontSize':
+                case 'density':
+                    // These require full refresh
+                    const videoElement = document.querySelector('video');
+                    const currentTime = videoElement ? videoElement.currentTime : 0;
+                    const wasPaused = videoElement ? videoElement.paused : true;
+
+                    // Clear current comments
+                    danmakuInstance.clear();
+
+                    // Update comments with new settings
+                    const updatedComments = danmakuList
+                        .filter(() => Math.random() <= currentSettings.density)
+                        .map(comment => ({
+                            text: comment.text,
+                            mode: 'rtl',
+                            time: typeof comment.time === 'number' ? comment.time : comment.stime,
+                            style: {
+                                font: `${currentSettings.fontWeight} ${currentSettings.fontSize}px "Microsoft YaHei", "PingFang SC", "Helvetica Neue", Arial, sans-serif`,
+                                fillStyle: '#ffffff',
+                                strokeStyle: '#000000',
+                                lineWidth: currentSettings.textShadow ? 2 : 0
+                            }
+                        }));
+
+                    // Recreate danmaku instance
+                    const danmakuContainer = document.getElementById(DANMAKU_OVERLAY_ID);
+                    if (videoElement && danmakuContainer) {
+                        danmakuInstance.destroy();
+                        danmakuInstance = new Danmaku({
+                            container: danmakuContainer,
+                            media: videoElement,
+                            comments: updatedComments.map(comment => ({
+                                ...comment,
+                                time: currentTime + (comment.time - currentTime)
+                            })),
+                            engine: 'canvas',
+                            speed: currentSettings.speed
+                        });
+
+                        if (!wasPaused) {
+                            danmakuInstance.show();
+                        }
+                    }
+                    break;
+            }
+
+            // Save settings
+            chrome.storage.local.set({ [SETTINGS_STORAGE_KEY]: currentSettings });
+
+        } catch (error) {
+            debugError('Error updating settings:', error);
+        }
+    }
+};
+
+// Expose the manager to window
+window.danmakuManager = DanmakuManager;
 
 function debugLog(...args) {
     if (DEBUG) console.log('🍥', ...args);
@@ -71,40 +160,124 @@ async function saveSettings(settings) {
     try {
         if (!chrome?.storage?.local) {
             debugLog('Chrome storage not available, settings not saved');
+            const previousSettings = { ...currentSettings };
             currentSettings = { ...defaultSettings, ...settings };
+
+            // Apply immediately if active
+            if (danmakuInstance && currentOverlayState) {
+                const changedSettings = getChangedSettings(previousSettings, currentSettings);
+                updateDanmakuWithSettings(changedSettings);
+            }
             return;
         }
+
+        const previousSettings = { ...currentSettings };
         const newSettings = { ...defaultSettings, ...settings };
+
+        // Save to storage
         await chrome.storage.local.set({ [SETTINGS_STORAGE_KEY]: newSettings });
         currentSettings = newSettings;
         debugLog('Saved settings:', newSettings);
 
         // Immediately apply new settings if danmaku is active
         if (danmakuInstance && currentOverlayState) {
-            updateDanmakuWithSettings();
+            const changedSettings = getChangedSettings(previousSettings, currentSettings);
+            updateDanmakuWithSettings(changedSettings);
         }
     } catch (error) {
         debugLog('Error saving settings:', error);
     }
 }
 
-function updateDanmakuWithSettings() {
-    if (!danmakuInstance) return;
+function updateDanmakuWithSettings(changedSettings = null) {
+    if (!danmakuInstance) {
+        debugLog('No danmaku instance to update');
+        return;
+    }
 
     try {
-        // Update speed
-        danmakuInstance.speed = currentSettings.speed;
+        debugLog('Updating danmaku with settings:', changedSettings);
 
-        // Update opacity
-        const container = document.getElementById(DANMAKU_OVERLAY_ID);
-        if (container) {
-            container.style.opacity = currentSettings.opacity;
+        // If no specific changes provided, consider all settings changed
+        const settingsToUpdate = changedSettings || Object.keys(currentSettings);
+        debugLog('Settings to update:', settingsToUpdate);
+
+        let needsFullUpdate = false;
+
+        // Update speed - can be done instantly without reinitialization
+        if (settingsToUpdate.includes('speed')) {
+            debugLog('Updating speed to:', currentSettings.speed);
+            danmakuInstance.speed = currentSettings.speed;
         }
 
-        // Clear and reinitialize with new settings
-        danmakuInstance.clear();
-        if (currentOverlayState && danmakuList.length > 0) {
-            setupDanmakuOverlay(danmakuList);
+        // Update opacity - can be done without reinitialization
+        if (settingsToUpdate.includes('opacity')) {
+            const container = document.getElementById(DANMAKU_OVERLAY_ID);
+            if (container) {
+                debugLog('Updating opacity to:', currentSettings.opacity);
+                container.style.opacity = currentSettings.opacity;
+            }
+        }
+
+        // Check if we need a full update
+        needsFullUpdate = [
+            'fontSize',
+            'fontWeight',
+            'textShadow',
+            'density'
+        ].some(setting => settingsToUpdate.includes(setting));
+
+        if (needsFullUpdate && danmakuList.length > 0) {
+            debugLog('Performing full update with new settings');
+
+            // Get current video time and state
+            const videoElement = document.querySelector('video');
+            const currentTime = videoElement ? videoElement.currentTime : 0;
+            const wasPaused = videoElement ? videoElement.paused : true;
+
+            // Clear existing comments
+            danmakuInstance.clear();
+
+            // Update existing comments with new styles
+            const updatedComments = danmakuList
+                .filter(() => Math.random() <= currentSettings.density)
+                .map(comment => ({
+                    text: comment.text,
+                    mode: 'rtl',
+                    time: typeof comment.time === 'number' ? comment.time : comment.stime,
+                    style: {
+                        font: `${currentSettings.fontWeight} ${currentSettings.fontSize}px "Microsoft YaHei", "PingFang SC", "Helvetica Neue", Arial, sans-serif`,
+                        fillStyle: '#ffffff',
+                        strokeStyle: '#000000',
+                        lineWidth: currentSettings.textShadow ? 2 : 0
+                    }
+                }));
+
+            // Create new Danmaku instance with updated settings
+            const container = document.getElementById(DANMAKU_OVERLAY_ID);
+            if (videoElement && container) {
+                if (danmakuInstance) {
+                    danmakuInstance.destroy();
+                }
+
+                danmakuInstance = new Danmaku({
+                    container: container,
+                    media: videoElement,
+                    comments: updatedComments,
+                    engine: 'canvas',
+                    speed: currentSettings.speed
+                });
+
+                // Restore video state
+                if (!wasPaused) {
+                    danmakuInstance.show();
+                    if (currentTime > 0) {
+                        danmakuInstance.seek(currentTime);
+                    }
+                }
+
+                debugLog('Danmaku instance updated with new settings');
+            }
         }
     } catch (error) {
         debugError('Error updating danmaku settings:', error);
@@ -127,7 +300,10 @@ function setupSettingsPanel() {
         <React.StrictMode>
             <DanmakuSettings
                 initialSettings={currentSettings}
-                onSettingsChange={saveSettings}
+                onSettingsChange={(newSettings) => {
+                    // Save settings and immediately apply
+                    saveSettings(newSettings);
+                }}
             />
         </React.StrictMode>
     );
@@ -160,6 +336,12 @@ function isAdvertisement() {
 }
 
 function cleanupDanmakuOverlay() {
+    // Clear any pending debounce timers
+    if (debounceReinitTimer) {
+        clearTimeout(debounceReinitTimer);
+        debounceReinitTimer = null;
+    }
+
     if (danmakuInstance) {
         danmakuInstance.destroy();
         danmakuInstance = null;
@@ -282,6 +464,9 @@ function setupDanmakuOverlay(dList) {
         } else {
             videoElement.parentElement.appendChild(container);
         }
+    } else {
+        // Update opacity in case it changed
+        container.style.opacity = currentSettings.opacity;
     }
 
     // Apply density to comments list
@@ -319,7 +504,6 @@ function setupDanmakuOverlay(dList) {
             comments: comments,
             engine: 'canvas',
             speed: currentSettings.speed,
-            opacity: currentSettings.opacity,
             defaultFontSize: currentSettings.fontSize
         });
 
@@ -572,6 +756,50 @@ async function init() {
     debugLog('Initializing content script');
     await loadSettings();
     setupSettingsPanel();
+
+    // Update the message listener for settings updates
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+        if (message.type === 'UPDATE_DANMAKU_SETTINGS') {
+            debugLog('Received settings update:', message.settings);
+
+            try {
+                // Update settings immediately
+                const previousSettings = { ...currentSettings };
+                currentSettings = { ...defaultSettings, ...message.settings };
+
+                // Apply settings immediately if danmaku is active
+                if (danmakuInstance && currentOverlayState) {
+                    // Get list of changed settings
+                    const changedSettings = Object.keys(message.settings).filter(
+                        key => previousSettings[key] !== message.settings[key]
+                    );
+
+                    debugLog('Changed settings:', changedSettings);
+
+                    // Apply updates immediately
+                    updateDanmakuWithSettings(changedSettings);
+                }
+
+                // Send success response
+                sendResponse({ success: true });
+            } catch (error) {
+                debugError('Error applying settings update:', error);
+                sendResponse({ success: false, error: error.message });
+            }
+            return true; // Keep the message channel open for async response
+        }
+    });
+
+    // Helper function to determine what settings changed
+    function getChangedSettings(oldSettings, newSettings) {
+        const changedKeys = [];
+        for (const key in newSettings) {
+            if (oldSettings[key] !== newSettings[key]) {
+                changedKeys.push(key);
+            }
+        }
+        return changedKeys;
+    }
 
     let lastCheckedUrl = window.location.href;
     let lastVideoId = currentVideoId;
