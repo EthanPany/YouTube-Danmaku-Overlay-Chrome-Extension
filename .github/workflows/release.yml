@@ -45,10 +45,7 @@ jobs:
         run: |
           # Remove package-lock.json if it exists to ensure clean install
           rm -f package-lock.json
-          # Install core dependencies first
-          npm install --save react react-dom prop-types danmaku
-          # Install remaining dependencies
-          npm install
+          npm install --legacy-peer-deps
 
       - name: Build extension
         run: npm run build
