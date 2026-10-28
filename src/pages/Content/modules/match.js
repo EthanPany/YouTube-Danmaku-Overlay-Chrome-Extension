@@ -1,349 +1,117 @@
-import { compareTwoStrings } from 'string-similarity';
-import { sify } from 'chinese-conv/dist';
+/**
+ * Ranks Bilibili candidates against a YouTube video.
+ *
+ * Signals, strongest first:
+ *  - explicit links: the YouTube id inside the Bilibili description, or a BV id
+ *    inside the YouTube description (near-certain)
+ *  - title similarity, taking the best over every YouTube title variant
+ *    (displayed, zh-localized, en-localized)
+ *  - duration agreement (Bilibili may be longer by a sponsor read)
+ *  - uploader similarity, or the channel name appearing in the Bilibili title
+ *  - popularity, as a tie-breaker between equally good reuploads
+ */
+import { normalize, textSimilarity } from './text';
 
-// Clean up console logs to only show important information
-const CLEAN_LOGS = true; // Set to true to enable clean logging
+export const WEIGHTS = { title: 0.5, duration: 0.3, author: 0.2 };
 
-function cleanLog(...args) {
-    if (CLEAN_LOGS) console.log('🍥', ...args);
+/** Auto-select the top candidate only above this score. */
+export const AUTO_ACCEPT_SCORE = 0.55;
+
+/**
+ * Duration agreement in [0, 1]. Unknown durations are neutral (0.5).
+ * Bilibili versions often carry an extra sponsor read or intro, so a longer
+ * Bilibili video is penalised more gently than a shorter one.
+ */
+export function durationScore(ytSeconds, biliSeconds) {
+    if (!ytSeconds || !biliSeconds) return 0.5;
+    const diff = biliSeconds - ytSeconds;
+    const abs = Math.abs(diff);
+    if (abs <= 3) return 1;
+    if (diff > 0 && diff <= 180) return Math.max(0.7, 1 - diff / 600);
+    const ratio = abs / Math.max(ytSeconds, biliSeconds);
+    return Math.max(0, 1 - ratio * 3);
 }
 
-// Helper function to clean and normalize text for Chinese content
-function normalizeText(text) {
-    if (!text) return '';
-
-    // Convert traditional to simplified Chinese
-    const simplified = sify(text);
-
-    return simplified
-        .toLowerCase()
-        .replace(/[【】「」『』（）()]/g, '') // Remove various brackets
-        .replace(/#[\w\u4e00-\u9fff]+/g, '') // Remove hashtags
-        .replace(/[^\w\s\u4e00-\u9fff]/g, ' ') // Keep alphanumeric, spaces, and Chinese characters
-        .replace(/\s+/g, ' ') // Normalize spaces
-        .trim();
+export function authorScore(ytChannelNorm, candidate) {
+    if (!ytChannelNorm) return 0;
+    const author = normalize(candidate.author || candidate.owner?.name || '');
+    let score = textSimilarity(ytChannelNorm, author);
+    // Reuploaders usually credit the creator in the title or description.
+    if (ytChannelNorm.length >= 2) {
+        const title = normalize(candidate.title || '');
+        const desc = normalize(candidate.description || '');
+        if (title.includes(ytChannelNorm)) score = Math.max(score, 0.8);
+        else if (desc.includes(ytChannelNorm)) score = Math.max(score, 0.6);
+    }
+    return score;
 }
 
-// Split text into words and characters
-function splitIntoTokens(text) {
-    if (!text) return new Set();
+/**
+ * @param {object} yt  { videoId, titles: string[], channel, duration, description }
+ * @param {object} candidate normalized Bilibili search item or view
+ */
+export function scoreCandidate(yt, candidate, prepared = prepareYouTube(yt)) {
+    const biliTitle = normalize(candidate.title);
+    const title = Math.max(0, ...prepared.titles.map((t) => textSimilarity(t, biliTitle)));
+    const duration = durationScore(yt.duration, candidate.duration);
+    const author = authorScore(prepared.channel, candidate);
 
-    // Create character-level tokens for Chinese text (each character is a token)
-    const chineseTokens = Array.from(text.match(/[\u4e00-\u9fa5]/g) || []);
+    let score = WEIGHTS.title * title + WEIGHTS.duration * duration + WEIGHTS.author * author;
 
-    // Create word-level tokens for non-Chinese text
-    const nonChineseText = text.replace(/[\u4e00-\u9fa5]/g, ' ');
-    const nonChineseTokens = nonChineseText
-        .toLowerCase()
-        .replace(/[^\w\s]/g, '') // Remove punctuation
-        .split(/\s+/)
-        .filter(token => token.length > 0);
+    // Only the duration agrees: likely a coincidence, not the same video.
+    if (title < 0.25 && author < 0.5) score *= 0.6;
+    // Wildly different lengths: a compilation, clip or different cut.
+    if (duration < 0.3) score *= 0.7;
 
-    // Combine both token types
-    const combinedTokens = [...chineseTokens, ...nonChineseTokens];
+    score += Math.min(0.04, Math.log10((candidate.danmaku || 0) + 1) / 100);
+    score += Math.min(0.06, 0.02 * Math.max(0, (candidate.hits || 1) - 1));
 
-    // Also add character bigrams for Chinese text to improve matching
-    for (let i = 0; i < chineseTokens.length - 1; i++) {
-        combinedTokens.push(chineseTokens[i] + chineseTokens[i + 1]);
-    }
-
-    return new Set(combinedTokens);
-}
-
-// Calculate similarity between two texts using improved overlap logic for better title matching
-function calculateTextSimilarity(text1, text2) {
-    if (!text1 || !text2) return 0;
-
-    // First convert both texts to simplified Chinese
-    const simplified1 = toSimplifiedChinese(text1);
-    const simplified2 = toSimplifiedChinese(text2);
-
-    // Convert to lowercase and clean special characters
-    const clean1 = simplified1.toLowerCase().replace(/[【】\[\]()（）\s#]/g, '').replace(/\s+/g, '');
-    const clean2 = simplified2.toLowerCase().replace(/[【】\[\]()（）\s#]/g, '').replace(/\s+/g, '');
-
-    // Handle perfect match after cleaning
-    if (clean1 === clean2) {
-        return 1.0;
-    }
-
-    // If one string contains the other (and they are not identical), calculate similarity based on length ratio
-    if (clean1.includes(clean2)) {
-        return clean2.length / clean1.length; // Score based on how much of clean1 is covered by clean2
-    }
-    if (clean2.includes(clean1)) {
-        return clean1.length / clean2.length; // Score based on how much of clean2 is covered by clean1
-    }
-
-    // Split into Chinese characters and words
-    const tokens1 = Array.from(clean1.match(/[\u4e00-\u9fa5]|[a-zA-Z]+|\d+/g) || []);
-    const tokens2 = Array.from(clean2.match(/[\u4e00-\u9fa5]|[a-zA-Z]+|\d+/g) || []);
-
-    if (tokens1.length === 0 || tokens2.length === 0) return 0;
-
-    // Create bigrams for better Chinese text matching
-    const bigrams1 = new Set();
-    const bigrams2 = new Set();
-
-    // Add individual tokens and bigrams
-    for (let i = 0; i < tokens1.length - 1; i++) {
-        bigrams1.add(tokens1[i]);
-        if (tokens1[i].match(/[\u4e00-\u9fa5]/)) {
-            bigrams1.add(tokens1[i] + tokens1[i + 1]);
-        }
-    }
-    if (tokens1.length > 0) bigrams1.add(tokens1[tokens1.length - 1]);
-
-    for (let i = 0; i < tokens2.length - 1; i++) {
-        bigrams2.add(tokens2[i]);
-        if (tokens2[i].match(/[\u4e00-\u9fa5]/)) {
-            bigrams2.add(tokens2[i] + tokens2[i + 1]);
-        }
-    }
-    if (tokens2.length > 0) bigrams2.add(tokens2[tokens2.length - 1]);
-
-    if (bigrams1.size === 0 && bigrams2.size === 0) return 0; // Avoid division by zero if both are empty after bigramming
-
-    // Calculate Jaccard similarity with bigrams
-    const intersection = new Set([...bigrams1].filter(x => bigrams2.has(x)));
-    const union = new Set([...bigrams1, ...bigrams2]);
-
-    if (union.size === 0) return 0; // Avoid division by zero if union is empty
-    const similarity = intersection.size / union.size;
-
-    // Add bonus for sequential matches
-    let sequentialBonus = 0;
-    if (tokens1.length > 0 && tokens2.length > 0) {
-        let currentSequence = 0;
-        let maxSequence = 0;
-
-        for (let i = 0; i < tokens1.length; i++) {
-            for (let j = 0; j < tokens2.length; j++) {
-                currentSequence = 0;
-                while (i + currentSequence < tokens1.length &&
-                    j + currentSequence < tokens2.length &&
-                    tokens1[i + currentSequence] === tokens2[j + currentSequence]) {
-                    currentSequence++;
-                }
-                maxSequence = Math.max(maxSequence, currentSequence);
-            }
-        }
-        sequentialBonus = maxSequence / Math.max(tokens1.length, tokens2.length) * 0.3;
-    }
-
-    // Add debug logging
-    // cleanLog(`Text similarity comparison:
-    //     Text 1: ${text1}
-    //     Text 2: ${text2}
-    //     Simplified 1: ${simplified1}
-    //     Simplified 2: ${simplified2}
-    //     Clean 1: ${clean1}
-    //     Clean 2: ${clean2}
-    //     Intersection size: ${intersection.size}
-    //     Union size: ${union.size}
-    //     Base Similarity: ${similarity}
-    //     Sequential Bonus: ${sequentialBonus}
-    //     Final Score: ${Math.min(1, similarity + sequentialBonus)}`);
-
-    return Math.min(1, similarity + sequentialBonus);
-}
-
-// Helper function to convert text to simplified Chinese with error handling
-function toSimplifiedChinese(text) {
-    if (!text) return '';
-    try {
-        return sify(text);
-    } catch (error) {
-        console.error('🍥 Error converting to Simplified Chinese:', error);
-        return text;
-    }
-}
-
-// Helper function to calculate Levenshtein-based similarity
-function calculateLevenshteinSimilarity(str1, str2) {
-    // Calculate Levenshtein distance
-    const matrix = Array(str2.length + 1).fill(null)
-        .map(() => Array(str1.length + 1).fill(null));
-
-    for (let i = 0; i <= str1.length; i++) {
-        matrix[0][i] = i;
-    }
-    for (let j = 0; j <= str2.length; j++) {
-        matrix[j][0] = j;
-    }
-
-    for (let j = 1; j <= str2.length; j++) {
-        for (let i = 1; i <= str1.length; i++) {
-            const indicator = str1[i - 1] === str2[j - 1] ? 0 : 1;
-            matrix[j][i] = Math.min(
-                matrix[j][i - 1] + 1,
-                matrix[j - 1][i] + 1,
-                matrix[j - 1][i - 1] + indicator
-            );
-        }
-    }
-
-    const distance = matrix[str2.length][str1.length];
-    const maxLength = Math.max(str1.length, str2.length);
-    return maxLength === 0 ? 1 : 1 - distance / maxLength;
-}
-
-// Helper function to parse duration string (e.g., "14:53" to seconds)
-function parseDuration(duration) {
-    if (typeof duration === 'number') return duration;
-
-    const parts = duration.split(':').map(Number);
-    if (parts.length === 2) {
-        return parts[0] * 60 + parts[1];
-    } else if (parts.length === 3) {
-        return parts[0] * 3600 + parts[1] * 60 + parts[2];
-    }
-    return 0;
-}
-
-// Calculate duration similarity score with more lenient matching
-function calculateDurationSimilarity(duration1, duration2) {
-    const d1 = parseDuration(duration1);
-    const d2 = parseDuration(duration2);
-
-    if (d1 === 0 || d2 === 0) return 0;
-
-    // Calculate ratio between durations
-    const ratio = Math.min(d1, d2) / Math.max(d1, d2);
-
-    // More lenient duration scoring
-    if (ratio >= 0.90) return 1.0;  // Perfect score for very close matches
-    if (ratio >= 0.80) return 0.95; // Nearly perfect for close matches
-    if (ratio >= 0.70) return 0.90; // Very good score for good matches
-    if (ratio >= 0.50) return 0.80; // Good score for reasonable matches
-
-    // Linear scale for the rest
-    return Math.max(0, ratio);
-}
-
-// Extract and normalize author information
-function extractAuthorInfo(videoData) {
-    const channelName = videoData.channelName || '';
-
-    // Match author name in different bracket styles
-    const titleAuthorMatch = videoData.title.match(/[【「『]([^】」』]+)[】」』]/) ||
-        videoData.title.match(/\(([^)]+)\)/);
-    const authorFromTitle = titleAuthorMatch ? titleAuthorMatch[1] : '';
-
-    // Clean and combine author information
-    const combinedAuthorInfo = normalizeText(`${channelName} ${authorFromTitle}`);
+    const linked =
+        (yt.videoId && `${candidate.description || ''} ${candidate.title || ''}`.includes(yt.videoId)) ||
+        (candidate.bvid && prepared.linkedBvids.has(candidate.bvid));
+    // A reupload that links the original is the same video, but a very
+    // different length means a different cut whose timing won't line up,
+    // so let a better-synced copy win if one exists.
+    if (linked) score = Math.max(score, duration >= 0.5 ? 0.97 : 0.6);
 
     return {
-        channelName: normalizeText(channelName),
-        authorFromTitle: normalizeText(authorFromTitle),
-        combinedAuthorInfo
+        score: Math.min(1, score),
+        breakdown: { title, duration, author, linked: !!linked },
     };
 }
 
-// Main matching function
-export function findBestMatch(ytData, biliResults) {
-    if (!ytData || !biliResults || biliResults.length === 0) {
-        return null;
-    }
-
-    // Weights for different components
-    const WEIGHTS = {
-        AUTHOR: 0.25,    // 25% weight for author match
-        TITLE: 0.45,     // 45% weight for title match
-        DURATION: 0.30    // 30% weight for duration match
-    };
-
-    let bestMatch = null;
-    let bestScore = 0;
-
-    // Extract YouTube data
-    const ytAuthorInfo = extractAuthorInfo(ytData);
-    const cleanYtTitle = normalizeText(ytData.fullTitle.replace(/[【「『].*?[】」』]|\(.*?\)/g, ''));
-
-    // Collect all results with scores to sort later
-    const scoredResults = [];
-
-    for (const biliVideo of biliResults) {
-        const biliAuthorInfo = extractAuthorInfo(biliVideo);
-        const cleanBiliTitle = normalizeText(biliVideo.title.replace(/[【「『].*?[】」』]|\(.*?\)/g, ''));
-
-        // Calculate author similarity using channel names only
-        const authorSimilarity = ytAuthorInfo.channelName && biliAuthorInfo.channelName ?
-            calculateTextSimilarity(ytAuthorInfo.channelName, biliAuthorInfo.channelName) : 0;
-
-        // Calculate title similarity
-        const titleSimilarity = calculateTextSimilarity(cleanYtTitle, cleanBiliTitle);
-        const durationSimilarity = calculateDurationSimilarity(ytData.duration, biliVideo.duration);
-
-        // Enhanced bonus for significant author or channel name matches
-        let authorBonus = 0;
-        if (authorSimilarity > 0.8) {
-            authorBonus = 0.15; // Increased bonus for very similar author
-        } else if (ytAuthorInfo.channelName && biliAuthorInfo.channelName &&
-            calculateTextSimilarity(ytAuthorInfo.channelName, biliAuthorInfo.channelName) > 0.7) {
-            authorBonus = 0.1; // Bonus for similar channel names
-        }
-
-        // Enhanced bonus for significant title matches
-        const titleBonus = titleSimilarity > 0.6 ? 0.15 : 0;
-
-        // Calculate weighted final score with bonuses
-        const finalScore = Math.min(1.0, (
-            authorSimilarity * WEIGHTS.AUTHOR +
-            titleSimilarity * WEIGHTS.TITLE +
-            durationSimilarity * WEIGHTS.DURATION +
-            authorBonus + titleBonus
-        ));
-
-        // Store this result with its score
-        scoredResults.push({
-            video: biliVideo,
-            score: finalScore,
-            authorSimilarity,
-            titleSimilarity,
-            durationSimilarity,
-            authorBonus,
-            titleBonus
-        });
-
-        if (finalScore > bestScore) {
-            bestScore = finalScore;
-            bestMatch = biliVideo;
-        }
-    }
-
-    // Sort results by score (descending)
-    scoredResults.sort((a, b) => b.score - a.score);
-
-    // Log matching details for debugging
-    const logArray = scoredResults.map(result => ({
-        title: result.video.title,
-        titleSimilarity: result.titleSimilarity,
-        authorSimilarity: result.authorSimilarity,
-        durationSimilarity: result.durationSimilarity,
-        score: result.score
-    }));
-    cleanLog(logArray);
-
-    if (bestMatch) {
-        cleanLog(`Final match: "${bestMatch.title}" with score ${(bestScore * 100).toFixed(1)}%`);
-    }
-
-    // Lower threshold for acceptance to accommodate traditional/simplified conversion issues
-    const MIN_SCORE_THRESHOLD = 0.20; // 20% overall match
-    const DURATION_BOOST_THRESHOLD = 0.95; // 95% duration similarity
-
-    // Accept match if score is good enough or if duration is very similar and score is reasonable
-    if (bestMatch) {
-        const bestDurationSimilarity = calculateDurationSimilarity(ytData.duration, bestMatch.duration);
-        if (bestScore >= MIN_SCORE_THRESHOLD ||
-            (bestDurationSimilarity >= DURATION_BOOST_THRESHOLD && bestScore >= 0.15)) {
-            return bestMatch;
-        }
-    }
-
-    return null;
+export function prepareYouTube(yt) {
+    const titles = [...new Set((yt.titles || []).map(normalize).filter(Boolean))];
+    const linkedBvids = new Set((yt.description || '').match(/BV[0-9A-Za-z]{10}/g) || []);
+    return { titles, channel: normalize(yt.channel || ''), linkedBvids };
 }
 
-// Export necessary functions
-export { calculateTextSimilarity, parseDuration, calculateDurationSimilarity }; 
+/**
+ * @returns {Array<object>} candidates with `score` and `breakdown`, best first
+ */
+export function rankCandidates(yt, candidates) {
+    const prepared = prepareYouTube(yt);
+    return candidates
+        .map((c) => ({ ...c, ...scoreCandidate(yt, c, prepared) }))
+        .sort((a, b) => b.score - a.score);
+}
+
+/** True when the ranked list's leader is good enough to use without asking. */
+export function isConfident(best) {
+    if (!best) return false;
+    const { title, author, linked } = best.breakdown;
+    return linked || (best.score >= AUTO_ACCEPT_SCORE && (title >= 0.3 || author >= 0.6));
+}
+
+/** Pools results of several queries, counting how many queries found each video. */
+export function mergeResults(resultLists) {
+    const byId = new Map();
+    for (const list of resultLists) {
+        for (const item of list || []) {
+            const existing = byId.get(item.bvid);
+            if (existing) existing.hits += 1;
+            else byId.set(item.bvid, { ...item, hits: 1 });
+        }
+    }
+    return [...byId.values()];
+}

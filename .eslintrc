@@ -1,6 +1,14 @@
 {
-  "extends": "react-app",
-  "globals": {
-    "chrome": "readonly"
+  "root": true,
+  "env": { "browser": true, "es2022": true, "node": true, "jest": true },
+  "parserOptions": { "ecmaVersion": 2022, "sourceType": "module", "ecmaFeatures": { "jsx": true } },
+  "plugins": ["react", "react-hooks"],
+  "extends": ["eslint:recommended", "plugin:react/recommended", "plugin:react/jsx-runtime", "plugin:react-hooks/recommended"],
+  "settings": { "react": { "version": "18" } },
+  "globals": { "chrome": "readonly" },
+  "rules": {
+    "react/prop-types": "off",
+    "react/jsx-uses-react": "error",
+    "no-unused-vars": ["error", { "argsIgnorePattern": "^_" }]
   }
 }

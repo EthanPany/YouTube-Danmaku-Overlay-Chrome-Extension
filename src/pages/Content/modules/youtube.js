@@ -1,91 +1,118 @@
-import { sify } from 'chinese-conv/dist';  // Import Simplified Chinese converter
+/**
+ * YouTube page integration: video id, metadata, player elements and ads.
+ *
+ * Metadata comes from YouTube's own InnerTube `player` endpoint rather than
+ * the DOM. That is faster (no waiting for the page to render), immune to
+ * stale DOM during SPA navigation and to ads reporting their own duration,
+ * and it lets us ask for the title in several languages: creators often set
+ * a Chinese and an English title, and YouTube only shows one of them.
+ */
 
-// Clean up console logs to only show important information
-const CLEAN_LOGS = true; // Set to true to enable clean logging
+const INNERTUBE_PLAYER = 'https://www.youtube.com/youtubei/v1/player?prettyPrint=false';
+const FALLBACK_CLIENT_VERSION = '2.20250101.00.00';
+const TITLE_LANGUAGES = ['zh-CN', 'en'];
 
-function cleanLog(...args) {
-    if (CLEAN_LOGS) console.log('🍥', ...args);
+export function getVideoIdFromUrl(href = window.location.href) {
+    try {
+        const url = new URL(href);
+        if (url.pathname === '/watch') return url.searchParams.get('v');
+        const live = url.pathname.match(/^\/live\/([\w-]{11})/);
+        return live ? live[1] : null;
+    } catch {
+        return null;
+    }
+}
+
+let clientVersion = null;
+
+/** Reads the live InnerTube client version from the page's inline ytcfg, once. */
+function getClientVersion() {
+    if (clientVersion) return clientVersion;
+    clientVersion = FALLBACK_CLIENT_VERSION;
+    if (typeof document === 'undefined') return clientVersion;
+    for (const script of document.scripts) {
+        const m = script.textContent.match(/"INNERTUBE_CLIENT_VERSION":"([\d.]+)"/);
+        if (m) {
+            clientVersion = m[1];
+            break;
+        }
+    }
+    return clientVersion;
 }
 
 /**
- * Extracts video metadata from the YouTube page.
- * @returns {object|null} An object with title, channel name, and duration, or null if not found.
+ * @returns {Promise<{title: string, lengthSeconds: number, author: string, shortDescription: string, keywords: string[]}|null>}
  */
-export function extractYouTubeVideoData() {
-    try {
-        // Get title element
-        const titleElement = document.querySelector('ytd-video-primary-info-renderer h1.title');
-        // Get channel name element
-        const channelElement = document.querySelector('ytd-video-owner-renderer #channel-name');
-        const player = document.querySelector('video');
+export async function fetchPlayerDetails(videoId, hl, fetchImpl = fetch) {
+    const res = await fetchImpl(INNERTUBE_PLAYER, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            context: { client: { clientName: 'WEB', clientVersion: getClientVersion(), hl } },
+            videoId,
+        }),
+    });
+    if (!res.ok) return null;
+    const details = (await res.json())?.videoDetails;
+    if (!details || details.videoId !== videoId) return null;
+    return { ...details, lengthSeconds: Number(details.lengthSeconds) || 0 };
+}
 
-        if (!titleElement || !player) {
-            console.log('Required elements not found');
-            return null;
+/** DOM fallback for when InnerTube is unavailable. */
+function readDom() {
+    const pick = (selectors) => {
+        for (const s of selectors) {
+            const text = document.querySelector(s)?.textContent?.trim();
+            if (text) return text;
         }
+        return '';
+    };
+    const title =
+        pick(['ytd-watch-metadata h1 yt-formatted-string', 'ytd-watch-metadata h1', 'h1.ytd-video-primary-info-renderer']) ||
+        document.title.replace(/^\(\d+\)\s*/, '').replace(/\s*-\s*YouTube$/, '');
+    const channel = pick(['ytd-watch-metadata ytd-channel-name a', '#owner ytd-channel-name a', 'ytd-video-owner-renderer #channel-name']);
+    const video = getVideoElement();
+    const duration = video && !isAdShowing() && Number.isFinite(video.duration) ? video.duration : 0;
+    return { title, channel, duration };
+}
 
-        // Get fresh title, channel name, and duration
-        const fullTitle = titleElement.textContent?.trim() || '';
-        const channelName = channelElement?.textContent?.trim() || '';
-        const duration = player.duration || 0;
+/**
+ * @typedef {object} YouTubeMeta
+ * @property {string} videoId
+ * @property {string[]} titles  every distinct title variant, original upload title first
+ * @property {string} channel
+ * @property {number} duration  seconds (0 if unknown)
+ * @property {string} description
+ */
 
-        // Check if title contains Chinese
-        const containsChinese = (text) => /[\u4e00-\u9fa5]/.test(text);
+/** @returns {Promise<YouTubeMeta>} */
+export async function getYouTubeMetadata(videoId, { fetchImpl = fetch, useDom = true } = {}) {
+    const results = await Promise.allSettled(TITLE_LANGUAGES.map((hl) => fetchPlayerDetails(videoId, hl, fetchImpl)));
+    const details = results.filter((r) => r.status === 'fulfilled' && r.value).map((r) => r.value);
+    const dom = useDom ? readDom() : { title: '', channel: '', duration: 0 };
 
-        // Try different patterns to extract Chinese title
-        const patterns = [
-            /【([^】]+)】/,  // Match text between 【】
-            /\[([^\]]+)\]/,  // Match text between []
-            /（([^）]+)）/,  // Match text between （）
-            /\(([^)]+)\)/,   // Match text between ()
-            /(.*?)(?:\s*#\w+)*/  // Match everything before hashtags
-        ];
+    // InnerTube titles first: the on-page <h1> may be YouTube's machine
+    // translation, or still show the previous video right after navigating.
+    const titles = [...new Set([...details.map((d) => d.title), details.length ? '' : dom.title].filter(Boolean))];
+    const primary = details[0] || {};
+    return {
+        videoId,
+        titles,
+        channel: primary.author || dom.channel || '',
+        duration: primary.lengthSeconds || dom.duration || 0,
+        description: primary.shortDescription || '',
+    };
+}
 
-        let title = fullTitle;
-        let extractedChineseTitle = '';
+export function getPlayerElement() {
+    return document.querySelector('#movie_player') || document.querySelector('.html5-video-player');
+}
 
-        // Try each pattern to find Chinese text
-        for (const pattern of patterns) {
-            const match = fullTitle.match(pattern);
-            if (match && match[1]) {
-                const matchedText = match[1].trim();
-                if (containsChinese(matchedText)) {
-                    extractedChineseTitle = matchedText;
-                    break;
-                }
-            }
-        }
+export function getVideoElement() {
+    return getPlayerElement()?.querySelector('video.html5-main-video') || document.querySelector('video');
+}
 
-        // If no Chinese title found in brackets, check if the main title contains Chinese
-        if (!extractedChineseTitle && containsChinese(fullTitle)) {
-            // Remove hashtags and trim
-            extractedChineseTitle = fullTitle.replace(/#[\w\u4e00-\u9fa5]+/g, '').trim();
-        }
-
-        // Convert to simplified Chinese if we found a Chinese title
-        if (extractedChineseTitle) {
-            try {
-                title = sify(extractedChineseTitle);
-                // cleanLog('Converted title to Simplified Chinese:', title);
-            } catch (error) {
-                console.error('🍥 Error converting to Simplified Chinese:', error);
-                title = extractedChineseTitle;
-            }
-        }
-
-        const videoData = {
-            title,
-            fullTitle,
-            channelName: containsChinese(channelName) ? sify(channelName) : channelName,
-            duration,
-            isSuspiciouslyShort: duration < 30
-        };
-
-        // cleanLog('YouTube video data:', videoData.title, '(', videoData.fullTitle, ')');
-        return videoData;
-
-    } catch (error) {
-        console.error('Error extracting YouTube video data:', error);
-        return null;
-    }
-} 
+/** YouTube toggles `ad-showing` on the player element for the whole ad break. */
+export function isAdShowing(player = getPlayerElement()) {
+    return !!player?.classList.contains('ad-showing');
+}

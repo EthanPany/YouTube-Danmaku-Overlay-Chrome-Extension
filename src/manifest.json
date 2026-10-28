@@ -1,52 +1,28 @@
 {
   "manifest_version": 3,
   "name": "YouTube→B站弹幕",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "background": {
     "service_worker": "background.bundle.js"
   },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": "icon-34.png"
+  },
   "content_scripts": [
     {
-      "matches": [
-        "*://*.youtube.com/*"
-      ],
-      "js": [
-        "standaloneContentScript.bundle.js"
-      ],
-      "run_at": "document_start"
-    },
-    {
-      "matches": [
-        "https://www.youtube.com/watch*"
-      ],
-      "js": [
-        "contentScript.bundle.js"
-      ],
+      "matches": ["*://www.youtube.com/*"],
+      "js": ["contentScript.bundle.js"],
       "run_at": "document_idle"
     }
   ],
-  "permissions": [
-    "storage",
-    "cookies"
-  ],
+  "permissions": ["storage", "cookies", "declarativeNetRequestWithHostAccess"],
   "host_permissions": [
-    "https://api.bilibili.com/*",
-    "https://*.bilibili.com/*"
+    "https://*.bilibili.com/*",
+    "https://sponsor.ajay.app/*",
+    "https://bsbsb.top/*"
   ],
   "icons": {
     "128": "icon-128.png"
-  },
-  "web_accessible_resources": [
-    {
-      "resources": [
-        "standaloneContentScript.bundle.js",
-        "vendor/CommentCoreLibrary.min.js",
-        "pageScript.bundle.js",
-        "contentScript.bundle.js"
-      ],
-      "matches": [
-        "*://*.youtube.com/*"
-      ]
-    }
-  ]
+  }
 }
