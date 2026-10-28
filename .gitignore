@@ -22,3 +22,7 @@
 
 # secrets
 secrets.*.js
+
+# eval: Jev responses may include account-specific usage data
+/eval/results/
+/eval/cache/youtube/

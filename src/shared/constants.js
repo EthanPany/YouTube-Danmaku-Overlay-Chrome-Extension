@@ -15,9 +15,12 @@ export const STORAGE_KEYS = {
 /** Message types between content script and background worker. */
 export const MSG = {
     SEARCH: 'BILI_SEARCH',
+    SEARCH_USERS: 'BILI_SEARCH_USERS',
+    UPLOADER_VIDEOS: 'BILI_UPLOADER_VIDEOS',
     VIEW: 'BILI_VIEW',
     DANMAKU: 'BILI_DANMAKU',
     SEGMENTS: 'SPONSOR_SEGMENTS',
+    JEV_RANK: 'JEV_RANK',
 };
 
 /** How long an automatic (not user-picked) match stays cached. */
@@ -55,6 +58,10 @@ export const DEFAULT_SETTINGS = {
 
     // --- sync ---
     skipSponsorSegments: true, // remap timeline around sponsor segments
+
+    // --- experimental ---
+    jevEnabled: false, // re-rank candidates with TypeSafe Jev (needs an API key)
+    jevApiKey: '',
 };
 
 /** Bilibili danmaku modes (DanmakuElem.mode). */

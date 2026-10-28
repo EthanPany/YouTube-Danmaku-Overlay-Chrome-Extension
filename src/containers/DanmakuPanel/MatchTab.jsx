@@ -14,7 +14,7 @@ function ScorePill({ score, breakdown }) {
         : '';
     return (
         <span className={`pill ${scoreClass(score)}`} title={tip}>
-            {Math.round(score * 100)}% match
+            {Math.round(Math.min(1, score) * 100)}% match
         </span>
     );
 }
@@ -32,8 +32,8 @@ function CandidateRow({ c, current, ytDuration, onPick }) {
                     {diff !== null && Math.abs(diff) > 2 && <span>{diff > 0 ? `+${diff}s` : `${diff}s`}</span>}
                     {c.danmaku > 0 && <span>💬 {formatCount(c.danmaku)}</span>}
                     {c.score !== undefined && (
-                        <span className="bar" title={`${Math.round(c.score * 100)}%`}>
-                            <i style={{ width: `${Math.round(c.score * 100)}%`, background: c.score >= 0.55 ? undefined : 'var(--amber)' }} />
+                        <span className="bar" title={`${Math.round(Math.min(1, c.score) * 100)}%`}>
+                            <i style={{ width: `${Math.round(Math.min(1, c.score) * 100)}%`, background: c.score >= 0.55 ? undefined : 'var(--amber)' }} />
                         </span>
                     )}
                 </div>

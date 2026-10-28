@@ -5,14 +5,18 @@
  * `{ ok: true, data }` or `{ ok: false, error }`.
  */
 import { MSG } from '../../shared/constants';
-import { searchVideos, getVideoView, getDanmaku, ensureBuvid, installRefererRule } from './modules/bilibiliApi';
+import { searchVideos, searchUsers, getUploaderVideos, getVideoView, getDanmaku, ensureBuvid, installRefererRule } from './modules/bilibiliApi';
 import { getSponsorSegments } from './modules/sponsorApi';
+import { callJev } from '../../shared/jev';
 
 const handlers = {
-    [MSG.SEARCH]: ({ keyword, page }) => searchVideos(keyword, page),
+    [MSG.SEARCH]: ({ keyword, filters }) => searchVideos(keyword, filters),
+    [MSG.SEARCH_USERS]: ({ keyword }) => searchUsers(keyword),
+    [MSG.UPLOADER_VIDEOS]: ({ mid, name }) => getUploaderVideos(mid, name),
     [MSG.VIEW]: ({ ref }) => getVideoView(ref),
     [MSG.DANMAKU]: ({ cid, aid, duration }) => getDanmaku(cid, aid, duration),
     [MSG.SEGMENTS]: ({ youtubeId, bvid, cid }) => getSponsorSegments({ youtubeId, bvid, cid }),
+    [MSG.JEV_RANK]: ({ body, apiKey }) => callJev(body, apiKey),
 };
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {

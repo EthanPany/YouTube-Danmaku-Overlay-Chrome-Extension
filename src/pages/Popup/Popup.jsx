@@ -37,6 +37,21 @@ const Popup = () => {
                     onChange={(e) => update({ autoCollapsePanel: e.target.checked })}
                 />
             </label>
+            <details className="experimental">
+                <summary>Experimental: Jev matching</summary>
+                <label className="row">
+                    <span>Re-rank matches with TypeSafe Jev</span>
+                    <input type="checkbox" checked={settings.jevEnabled} onChange={(e) => update({ jevEnabled: e.target.checked })} />
+                </label>
+                <input
+                    className="key"
+                    type="password"
+                    placeholder="TypeSafe API key"
+                    value={settings.jevApiKey}
+                    onChange={(e) => update({ jevApiKey: e.target.value.trim() })}
+                />
+                <p className="hint">Sends the video title, channel and candidate titles to api.typesafe.ai. Off by default.</p>
+            </details>
             <p className="hint">
                 Open any YouTube video. Matching, filters and timing are in the <b>弹</b> panel at the right edge of the page.
                 Per-video on/off overrides this default.

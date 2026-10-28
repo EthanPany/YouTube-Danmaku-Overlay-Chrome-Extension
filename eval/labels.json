@@ -1,0 +1,297 @@
+{
+  "_doc": "Hand-reviewed ground truth. Overrides the automatic proposal from build-dataset.mjs. expected = acceptable bvids ([] = verified no counterpart); exclude = ambiguous, not scored.",
+  "wQdt92LRlUA": {
+    "expected": [
+      "BV1cqaA6tEJ4"
+    ],
+    "note": "same title, same length"
+  },
+  "HB3wWWsX7kk": {
+    "expected": [
+      "BV1a7YF6qEW2"
+    ],
+    "note": "same title, same length"
+  },
+  "4lmr0rbgU6Y": {
+    "expected": [
+      "BV1z9Jy6rE4y"
+    ],
+    "note": "same title, same length"
+  },
+  "d606jbbQJSg": {
+    "exclude": true,
+    "note": "ThinkBook Auto Twist review not found on Bilibili; unverifiable"
+  },
+  "oF73v1SGPtk": {
+    "exclude": true,
+    "note": "auto label was a different episode; true upload unverified"
+  },
+  "GTUhahWJpIo": {
+    "expected": [
+      "BV1raJ162EqN"
+    ],
+    "note": "identical title+length on creator's second account 暴躁的仙人JUMP"
+  },
+  "qD3hDjbkkBw": {
+    "exclude": true,
+    "note": "auto label wrong; true upload unverified"
+  },
+  "fW5yXno_4Hw": {
+    "exclude": true,
+    "note": "auto label wrong; true upload unverified"
+  },
+  "MY-nhX_4Ve8": {
+    "exclude": true,
+    "note": "auto label wrong; true upload unverified"
+  },
+  "GlYgs6v2YfU": {
+    "exclude": true,
+    "note": "Part 2; auto label was Part 1"
+  },
+  "e0mNDdEm-Tg": {
+    "expected": [
+      "BV1G4Jy6wE1h"
+    ],
+    "note": "same title, 3s longer"
+  },
+  "hkJFPUKTUwk": {
+    "expected": [
+      "BV19naF66Ezb"
+    ],
+    "note": "Linksphotograph, retitled (15万 -> 北极)"
+  },
+  "2hGYusyRtjw": {
+    "expected": [
+      "BV1XAew6mE6W"
+    ],
+    "note": "Linksphotograph, same title"
+  },
+  "angu54OTcsc": {
+    "expected": [
+      "BV1t93W6CEh2"
+    ],
+    "note": "Linksphotograph, same title"
+  },
+  "QVv3mQzlrN0": {
+    "expected": [
+      "BV1z9pk61ETi",
+      "BV1TYJk6JEVK",
+      "BV1Bpp26WEjs"
+    ],
+    "note": "several translated reuploads"
+  },
+  "3NKV3qS74zA": {
+    "expected": [
+      "BV1c5aw6WEEm"
+    ],
+    "note": "RX official, +43s"
+  },
+  "4IlGywDGasA": {
+    "expected": [
+      "BV1aFno6wETM"
+    ],
+    "note": "影视飓风 动态视频"
+  },
+  "FgS1qt3THSI": {
+    "expected": [
+      "BV1HhnM62ER1"
+    ],
+    "note": "影视飓风 动态视频"
+  },
+  "75DNwTm6AXw": {
+    "expected": [
+      "BV1bLei6BEGo"
+    ],
+    "note": "食贫道 official, +53s"
+  },
+  "SHWjQrGb3MQ": {
+    "expected": [
+      "BV1Evgk61E2T"
+    ],
+    "note": "fan reupload, same title"
+  },
+  "0V-GiPHgRwI": {
+    "expected": [
+      "BV16hjo6KEwC",
+      "BV1Euuy67EKn"
+    ],
+    "note": "fan reuploads"
+  },
+  "DQGrPstFRVI": {
+    "expected": [
+      "BV1kRG26NEwh",
+      "BV1EJG26FE5h",
+      "BV1GVbr62EiH"
+    ],
+    "note": "fan reuploads (some trimmed)"
+  },
+  "WeBa4ZawcPo": {
+    "expected": [
+      "BV1279DBHEkW",
+      "BV11d9xBJEm2",
+      "BV1ft9xBqEj5",
+      "BV1S39DBxEsb"
+    ],
+    "note": "fan reuploads"
+  },
+  "o2OvyS10nyw": {
+    "expected": [
+      "BV19qEd6FEdo"
+    ],
+    "note": "爱否科技FView official"
+  },
+  "XS3oIyEPQU4": {
+    "expected": [
+      "BV1qz7k6tE5q"
+    ],
+    "note": "爱否科技FView official"
+  },
+  "5_Fayfx2NUM": {
+    "exclude": true,
+    "note": "only a Chinese dub with a different cut (707s vs 894s)"
+  },
+  "_reviewed": [
+    "A6h6sreJ-XI",
+    "WLueMp-j2Jk",
+    "CPAK9-owrIA",
+    "m3Dj6sBWdpQ",
+    "_0G4OG39XjI",
+    "3iRUwVzRDZQ",
+    "JsH7-1Z2lks",
+    "UHIu45iEBUo",
+    "FmSZpoRX79s",
+    "xgHmWuJHp7Y",
+    "SDoTcPwlVfo",
+    "EgRS4VQzAys",
+    "n_jQGRymHCw",
+    "R1-j8TFlqCo",
+    "T7z71yENz94",
+    "8BN8p5xDkzw",
+    "l38ceFOWOAE",
+    "8ybVhACW1ao",
+    "4m9gGbJ4c80",
+    "L5RfZwzaUfI",
+    "PBH42vW0cJ4",
+    "LKrwhjOI8Nc",
+    "Nbwv5wHQoj0",
+    "l6DKRf-fAAM",
+    "ldxFjLJ3rVY",
+    "PXbVn-f_wuM",
+    "ujkD4SxPKOI",
+    "Z5L6hwVWWFg",
+    "KxiUncxSnIo",
+    "1KxqLC7F0iE",
+    "DZSYaQmxBLM",
+    "P6pcTK0wTYA",
+    "DN953UW8iJ8",
+    "ESABTN4VtrA",
+    "scwlR0QHGOk",
+    "DYM2X69BUjY",
+    "LtgzvWnS6ys",
+    "T-z516mgjCw",
+    "_y9JuojAIg0",
+    "QW_jlUn4gA8",
+    "HsGhULyYyL8",
+    "fuiujdBtLjI",
+    "g00-PGtexNg",
+    "Pc-Mh4G0d_g",
+    "N9gUIGoQnAQ",
+    "i0B3Z9lhXOw",
+    "m19LBe9J1bQ",
+    "7g0O0E8RcgA",
+    "hgkb5nP6CSQ",
+    "Lv6rOL9EdHw",
+    "mBmluBvZxnA",
+    "8NiwrTuUl_0",
+    "G6ooFCusAZA",
+    "ng1MQA3JkdU"
+  ],
+  "3HQ8Aiwjqus": {
+    "expected": [
+      "BV1fonX6iErg"
+    ],
+    "note": "creator's second account 短的差评君, same title+length"
+  },
+  "XNakTkM-tdA": {
+    "expected": [
+      "BV15Sny6gEQV"
+    ],
+    "note": "creator's second account 短的差评君, same title+length"
+  },
+  "jS79jFZ1aA4": {
+    "expected": [
+      "BV1V9J46SEkd"
+    ],
+    "note": "same title, +12s"
+  },
+  "JKljQMMaBxE": {
+    "expected": [
+      "BV16Rn86zEBJ"
+    ],
+    "note": "李永乐老师官方"
+  },
+  "IIWJsVSFkOU": {
+    "expected": [
+      "BV1PeJ46eEV3"
+    ],
+    "note": "李永乐老师官方"
+  },
+  "vmJJIy-tbiE": {
+    "expected": [
+      "BV133J16wEkN"
+    ],
+    "note": "李永乐老师官方"
+  },
+  "iJMAqm9ZThg": {
+    "expected": [
+      "BV1ZoWtznEPQ"
+    ],
+    "note": "李永乐老师官方, retitled"
+  },
+  "g0Yp2yiHFKo": {
+    "expected": [
+      "BV12uHQ6CE3G"
+    ],
+    "note": "李永乐老师官方"
+  },
+  "ivT9SuT6Qyw": {
+    "expected": [
+      "BV1Pxad61EVz"
+    ],
+    "note": "科技美学 official, same title"
+  },
+  "jAs8W9VIVXY": {
+    "exclude": true,
+    "note": "auto label was a different video; true upload unverified"
+  },
+  "jGD3fY_l1TE": {
+    "exclude": true,
+    "note": "auto label wrong; true upload unverified"
+  },
+  "T-z516mgjCw": {
+    "expected": [
+      "BV1tsaN6VEoK"
+    ],
+    "note": "same title and uploader; YouTube cut is 195s longer"
+  },
+  "DYM2X69BUjY": {
+    "expected": [
+      "BV18b7D6TEKL"
+    ],
+    "note": "identical title, same uploader; Bilibili cut 288s longer"
+  },
+  "LtgzvWnS6ys": {
+    "expected": [
+      "BV1JbctzcEVH"
+    ],
+    "note": "identical title, same uploader; Bilibili cut 129s longer"
+  },
+  "ng1MQA3JkdU": {
+    "exclude": true,
+    "note": "Bilibili has a 2x-length extended cut with the same title; ambiguous"
+  },
+  "scwlR0QHGOk": {
+    "exclude": true,
+    "note": "a 1365s 'Tesla Roadster Launch' recording of identical length exists; unverifiable"
+  }
+}

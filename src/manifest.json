@@ -11,16 +11,25 @@
   },
   "content_scripts": [
     {
-      "matches": ["*://www.youtube.com/*"],
-      "js": ["contentScript.bundle.js"],
+      "matches": [
+        "*://www.youtube.com/*"
+      ],
+      "js": [
+        "contentScript.bundle.js"
+      ],
       "run_at": "document_idle"
     }
   ],
-  "permissions": ["storage", "cookies", "declarativeNetRequestWithHostAccess"],
+  "permissions": [
+    "storage",
+    "cookies",
+    "declarativeNetRequestWithHostAccess"
+  ],
   "host_permissions": [
     "https://*.bilibili.com/*",
     "https://sponsor.ajay.app/*",
-    "https://bsbsb.top/*"
+    "https://bsbsb.top/*",
+    "https://api.typesafe.ai/*"
   ],
   "icons": {
     "128": "icon-128.png"

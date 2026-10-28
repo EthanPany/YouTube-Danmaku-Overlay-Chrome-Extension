@@ -14,7 +14,9 @@
     "format": "prettier --write \"src/**/*.{js,jsx,css}\"",
     "prepare": "husky",
     "package": "npm run build && cd build && zip -r ../extension.zip .",
-    "eval:align": "jest --testMatch '<rootDir>/scripts/alignment.eval.js' --testTimeout 600000"
+    "eval:align": "jest --testMatch '<rootDir>/scripts/alignment.eval.js' --testTimeout 600000",
+    "eval": "node --import ./eval/lib/register.mjs eval/run-eval.mjs",
+    "eval:build": "node eval/build-dataset.mjs"
   },
   "keywords": [
     "youtube",

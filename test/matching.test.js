@@ -66,6 +66,12 @@ describe('buildQueries', () => {
         expect(q).toHaveLength(1);
     });
 
+    it('does not mistake the channel name for the title', () => {
+        const q = buildQueries({ titles: ['第二名 | 老高與小茉 Mr & Mrs Gao'], channel: '老高與小茉 Mr & Mrs Gao' });
+        expect(q[0]).toBe('第二名');
+        expect(q.some((x) => x.includes('第二名') && x.includes('老高'))).toBe(true);
+    });
+
     it('corePart picks the CJK segment', () => {
         expect(corePart('MKBHD Review - 苹果手机评测 | 2024')).toBe('苹果手机评测');
     });
@@ -88,6 +94,18 @@ describe('ranking', () => {
         ]);
         expect(ranked[0].bvid).toBe('BV1xxxxxxxx2');
         expect(isConfident(ranked[0])).toBe(true);
+    });
+
+    it('needs corroboration when only uploader and length agree', () => {
+        const sameChannel = (bvid, duration, extra = {}) => ({ bvid, title: '完全不同的标题', author: '某某频道', duration, ...extra });
+        const busy = rankCandidates(yt, [sameChannel('BVa', 601), sameChannel('BVb', 598)]);
+        expect(isConfident(busy)).toBe(false);
+        const dated = rankCandidates({ ...yt, publishDate: '2026-10-01T00:00:00Z' }, [
+            sameChannel('BVa', 601, { pubdate: Date.parse('2026-10-01') / 1000 }),
+            sameChannel('BVb', 598, { pubdate: Date.parse('2026-08-01') / 1000 }),
+        ]);
+        expect(dated[0].bvid).toBe('BVa');
+        expect(isConfident(dated)).toBe(true);
     });
 
     it('does not trust a duration-only match', () => {
@@ -121,5 +139,41 @@ describe('ranking', () => {
         const merged = mergeResults([[{ bvid: 'A' }, { bvid: 'B' }], [{ bvid: 'A' }]]);
         expect(merged.find((m) => m.bvid === 'A').hits).toBe(2);
         expect(merged).toHaveLength(2);
+    });
+});
+
+describe('searchForYouTube', () => {
+    // eslint-disable-next-line global-require
+    const { searchForYouTube } = require('../src/pages/Content/modules/bilibili');
+    const yt = { videoId: 'abcDEF12345', titles: ['我用100天做了一台电脑'], channel: '某某频道', duration: 600, description: '' };
+
+    it('pools results across queries', async () => {
+        const search = async (q) => (q.includes('电脑') ? [{ bvid: 'BV1', title: '我用100天做了一台电脑', author: '某某频道', duration: 600 }] : []);
+        const { ranked } = await searchForYouTube(yt, { search, searchUsers: async () => [], uploaderVideos: async () => [] });
+        expect(ranked[0].bvid).toBe('BV1');
+        expect(ranked[0].hits).toBeGreaterThan(1);
+    });
+
+    it('surfaces an error when every query fails', async () => {
+        const search = async () => {
+            throw new Error('rate limited');
+        };
+        await expect(searchForYouTube(yt, { search })).rejects.toThrow('rate limited');
+    });
+
+    it("finds a retitled upload in the creator's own channel", async () => {
+        const ytRetitled = { ...yt, publishDate: '2026-10-01T10:00:00-07:00' };
+        const api = {
+            search: async () => [{ bvid: 'BVclip', title: '我用100天做了一台电脑 片段', author: '路人', mid: 9, duration: 60 }],
+            searchUsers: async () => [{ mid: 42, name: '某某频道', fans: 1000 }],
+            uploaderVideos: async () => [
+                { bvid: 'BVother', title: '另一期视频', author: '某某频道', mid: 42, duration: 300, pubdate: Date.parse('2026-09-20') / 1000 },
+                { bvid: 'BVown', title: '一百天，一台电脑', author: '某某频道', mid: 42, duration: 601, pubdate: Date.parse('2026-10-01') / 1000 },
+            ],
+        };
+        const { ranked, uploader } = await searchForYouTube(ytRetitled, api);
+        expect(uploader.mid).toBe(42);
+        expect(ranked[0].bvid).toBe('BVown');
+        expect(isConfident(ranked[0])).toBe(true);
     });
 });

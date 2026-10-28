@@ -32,6 +32,23 @@ export function corePart(title) {
     return pool.reduce((a, b) => (b.length > a.length ? b : a));
 }
 
+/**
+ * Drops title segments that are only the channel name, e.g.
+ * "第二名 | 老高與小茉 Mr & Mrs Gao" -> "第二名", so the channel name is not
+ * mistaken for the video's title. Returns the title unchanged if nothing
+ * else would remain.
+ */
+export function withoutChannel(title, channel) {
+    const ch = normalize(channel || '').replace(/ /g, '');
+    if (ch.length < 2) return title;
+    const parts = title.split(SEPARATORS);
+    const kept = parts.filter((p) => {
+        const n = normalize(p).replace(/ /g, '');
+        return n && !(ch.includes(n) || n.includes(ch));
+    });
+    return kept.length && kept.length < parts.length ? kept.join(' | ') : title;
+}
+
 /** "Mediastorm影视飓风" -> "影视飓风"; "Kurzgesagt – In a Nutshell" -> "Kurzgesagt". */
 export function channelName(channel) {
     const cjk = cjkPart(channel);
@@ -54,7 +71,7 @@ export function buildQueries(yt) {
         queries.push(query);
     };
 
-    const titles = (yt.titles || []).map(stripNoise).filter(Boolean);
+    const titles = (yt.titles || []).map((t) => withoutChannel(stripNoise(t), yt.channel)).filter(Boolean);
     const cjkTitles = titles.filter(hasCJK);
     const channel = stripNoise(yt.channel || '');
 

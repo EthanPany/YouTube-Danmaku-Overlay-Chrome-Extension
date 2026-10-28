@@ -4,42 +4,46 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A Manifest V3 Chrome extension ("YouTube→B站弹幕") that finds the Bilibili re-upload of the YouTube video being watched and overlays that video's danmaku (scrolling comments) on the YouTube player. Plain JS/JSX + React 18, bundled with webpack 5 + Babel.
+A Manifest V3 Chrome extension ("YouTube→B站弹幕") that finds the Bilibili upload of the YouTube video being watched and overlays its danmaku on the YouTube player. Plain JS/JSX + React 18, bundled with webpack 5 + Babel.
 
 ## Commands
 
 ```bash
 npm install
-npm start          # webpack --watch, dev build into build/
-npm run build      # production build into build/
-npm run package    # build, then zip build/ into extension.zip
-npm run lint       # eslint src/**/*.{js,jsx}
-npm run format     # prettier
+npm start            # webpack --watch, development build into build/
+npm run build        # production (minified) build into build/
+npm run package      # build + zip build/ into extension.zip
+npm test             # jest unit tests (test/*.test.js)
+npx jest test/matching.test.js -t "ranking"   # single file / test name
+npm run lint
+npm run eval         # score the matcher on eval/dataset.json (cached, offline-capable)
+npm run eval -- --split dev --verbose          # per-video failures (dev split only)
+npm run eval:build   # (re)build the eval dataset from eval/channels.json
+npm run eval:match   # ad-hoc live matching run (scripts/matching.eval.js)
+npm run eval:align   # ad-hoc live alignment run (scripts/alignment.eval.js)
 ```
 
-Load `build/` via `chrome://extensions` → Developer mode → Load unpacked. After a rebuild, reload the extension card and refresh the YouTube tab.
-
-There are no tests: `npm test` runs jest but there are no test files. Verify changes by loading the extension on a real `youtube.com/watch` page. Logs are prefixed with 🍥.
-
-## Releases
-
-`.github/workflows/release.yml` runs on pushes to `main` **only when the head commit message contains `[release]`**. It builds, zips, and publishes a GitHub Release tagged `v<package.json version>`. Text between `[release]...[/release]` becomes the release notes. Bump `version` in `package.json` before a release commit; the build injects the package version and description into `manifest.json`, overriding the values in `src/manifest.json`.
+Load `build/` via `chrome://extensions` → Developer mode → Load unpacked; reload the extension card after rebuilding. Dev builds use `cheap-module-source-map` because extension CSP forbids eval.
 
 ## Architecture
 
-The live code path is small. Most of it is in `src/pages/Content/`:
+Three bundles (see `webpack.config.js`): content script, service worker, toolbar popup.
 
-- **`src/pages/Content/index.js`**: the content script injected on `youtube.com/watch*` (bundled as `contentScript.bundle.js`). It orchestrates everything: waits for the player, extracts YouTube metadata, runs search → match → fetch danmaku, renders the React popup (`containers/DanmakuMatchPopup`, with `containers/DanmakuSettings` nested inside) into the page, and drives the overlay with the `danmaku` npm library (weizhenye/Danmaku) bound to the `<video>` element. It also hides the overlay during ads (MutationObserver on the player) and handles YouTube SPA navigation by watching for video ID changes and doing a full cleanup and rerun. It sets `window.danmakuManager`, which `DanmakuSettings.jsx` calls to apply settings live.
-- **`modules/youtube.js`**: scrapes title, channel, and duration from the DOM. It prefers Chinese titles inside 【】/[]/() brackets.
-- **`modules/bilibili.js`**: Bilibili search (`/x/web-interface/search/all/v2`), video details (`/x/web-interface/view`, which provides the `cid`), and danmaku XML (`comment.bilibili.com/<cid>.xml`). **All requests go through the background service worker** via `chrome.runtime.sendMessage({action: 'fetch', url})`. The content script never fetches Bilibili directly because of CORS and the cookies Bilibili requires.
-- **`modules/match.js`**: `findBestMatch` gives each candidate a weighted score from author, title, and duration similarity (`string-similarity` plus `chinese-conv` simplified-Chinese normalization). Weights are in `WEIGHTS`, and the acceptance cutoffs `MIN_SCORE_THRESHOLD` / `DURATION_BOOST_THRESHOLD` are near the bottom of the file. Tune matching here.
-- **`src/pages/Background/index.js`**: the service worker. It handles `FETCH_BILI_API` / `action: 'fetch'` by fetching with all `bilibili.com` cookies (falling back to a static `buvid3`) plus a Bilibili Referer. It returns `{data}` (JSON or XML/text) or `{error}`.
+**Service worker** (`src/pages/Background/`) is the only code that talks to Bilibili/SponsorBlock/TypeSafe. The content script sends messages typed in `src/shared/constants.js` (`MSG`); replies are `{ok, data}` / `{ok, error}`. `modules/bilibiliApi.js` handles: buvid3 bootstrap via `/x/frontend/finger/spi` (search returns -412 without it), a session declarativeNetRequest rule adding `Referer` (fetch can't set it), WBI signing (`wbi.js` + `md5.js`; unsigned `/view` now 412s), a concurrency limiter, and danmaku from protobuf `seg.so` (6-min segments, decoded by `dmProtobuf.js`) merged with the XML pool by comment id.
 
-State lives in `chrome.storage.local`. Global danmaku settings are stored under `youtubeDanmakuSettings`, and each video's on/off toggle under `youtubeDanmakuToggleState_<videoId>`.
+**Content script** (`src/pages/Content/`) runs on all `www.youtube.com` pages (YouTube is an SPA). `index.js` detects navigation via `yt-navigate-finish` + URL poll (never a body-wide MutationObserver). `controller.js` is the per-video state machine and single source of truth for the UI; async steps check `this.generation` to drop stale results. Pipeline:
 
-### Legacy and boilerplate code (not on the live path)
+1. `modules/youtube.js` — metadata from InnerTube `/youtubei/v1/player` in zh-CN and en (original + localized titles, real duration). The DOM `<h1>` is a last resort: it can be YouTube's machine translation or stale after navigation.
+2. `modules/queries.js` → `modules/bilibili.js#searchForYouTube` — several query variants searched in parallel plus a search for the YouTube id (kept only if the result links it).
+3. `modules/match.js` — scoring (title similarity over all title variants via `text.js`, duration, uploader, explicit links) and `isConfident` gating auto-selection. Optional Jev re-rank (`src/shared/jev.js`, off by default, needs a TypeSafe key).
+4. `modules/alignment.js` — maps Bilibili time → YouTube time around sponsor sections (SponsorBlock/BilibiliSponsorBlock segments fitted to the duration difference, else "空降"/ad-talk danmaku detection) plus per-video manual offset.
+5. `modules/danmakuFilter.js` — modes, smart-block weight, keyword/regex block, duplicate merge, per-second cap.
+6. `modules/renderer.js` — wraps the `danmaku` canvas library inside `#movie_player`; the library itself follows the `<video>` events.
 
-- `src/contentScript.js`, `src/pageScript.js`, `src/standaloneContentScript.js`, and `vendor/CommentCoreLibrary.min.js` are from an earlier CommentCoreLibrary-based renderer. `src/contentScript.js` is not a webpack entry; the `contentScript` entry is `pages/Content/index.js`. `standaloneContentScript` is still listed in the manifest (it runs at `document_start`), but `vendor/` is not copied into `build/`.
-- Newtab, Options, Panel, Devtools, and `containers/Greetings` come from the chrome-extension boilerplate. They are built but not referenced in the manifest. The Popup page is a placeholder.
-- `utils/build.js` and `utils/webserver.js` are boilerplate scripts that the npm scripts don't use, and they depend on packages that aren't installed.
-- `project plan.md` and `templete.md` are planning notes.
+**Panel UI** (`src/containers/DanmakuPanel/`) renders in a shadow root (`mount.jsx`), which also stops key events from inputs reaching YouTube's shortcuts. CSS lives in `styles.js` as a string.
+
+**State**: `chrome.storage.local` holds settings (`STORAGE_KEYS.SETTINGS`, merged over `DEFAULT_SETTINGS`) and per-video records (`video:<id>` → matched bvid/cid, manual flag, offset, on/off). Automatic matches expire after 7 days; manual ones don't.
+
+## Eval set (`eval/`)
+
+`eval/dataset.json` is ground truth built by `eval/build-dataset.mjs` from `eval/channels.json` **without** using the matcher (uploader archive lists matched by duration/date, reviewed by hand; overrides in `eval/labels.json`). All HTTP is cached in `eval/cache/http/`, so `npm run eval` replays offline (`EVAL_OFFLINE=1` enforces it). Tune only against the `dev` split; `test` channels are held out. Never import anything from `eval/` into `src/`, and don't add channel-specific rules to the matcher.

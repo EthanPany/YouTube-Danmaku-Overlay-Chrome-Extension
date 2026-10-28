@@ -43,3 +43,11 @@ describe('dm protobuf', () => {
         }
     });
 });
+
+describe('cleanSearchTitle', () => {
+    // eslint-disable-next-line global-require
+    const { cleanSearchTitle } = require('../src/pages/Background/modules/bilibiliApi');
+    it('strips highlights and decodes named and numeric entities', () => {
+        expect(cleanSearchTitle('There&#x27;s <em class="keyword">never</em> &amp; &#39;ever&quot;')).toBe('There\'s never & \'ever"');
+    });
+});

@@ -4,81 +4,37 @@ A Chrome extension that overlays Bilibili-style danmaku comments on YouTube vide
 
 ## Features
 
-- Automatic matching of YouTube videos with Bilibili content using title, duration, and author information.
-- Real-time danmaku overlay on YouTube videos, synchronized with playback.
-- Customizable danmaku settings:
-  - Font size
-  - Speed
-  - Opacity
-  - Text shadow (implicitly via `DanmakuSettings` and `Content/index.js` styling)
-  - Density control
-- Ad-aware: Automatically pauses danmaku during YouTube advertisements.
-- Responsive design that adapts to video player size, including fullscreen and theater modes.
-- Traditional/Simplified Chinese character support in matching and display.
-- In-page popup to display match information and toggle danmaku.
-- Persistent settings and per-video toggle state using `chrome.storage`.
+- **Automatic matching** of the YouTube video to its Bilibili upload. It searches several title variants in parallel: the original and translated titles, the Chinese and English halves of bilingual titles, creator + title, and the YouTube ID. Results are ranked by title, length and uploader. A video is auto-selected only when the match is confident.
+- **You stay in control**: the side panel lists the top alternatives, and you can search Bilibili or paste a BV ID or link. A video you pick is remembered for that YouTube video.
+- **Full danmaku**: protobuf segments merged with the XML pool, keeping each sender's color, size and position (scrolling, top, bottom).
+- **Filters**: Bilibili's smart-block level (屏蔽等级), scrolling/top/bottom toggles, blocked words or `/regex/`, merging of repeated comments ("哈哈哈 ×12"), and a per-second cap that keeps the best comments instead of random ones.
+- **Sponsor-aware sync**: if one upload has a sponsor read the other doesn't, the timeline is remapped. Segments come from SponsorBlock / BilibiliSponsorBlock, or are detected from "空降" and "恰饭" comments. A per-video manual offset is also saved.
+- **Unobtrusive UI**: the panel tucks into a small draggable tab on the right edge when idle. Danmaku hide during ads and stay below YouTube's captions and controls.
+- **Fast**: cached matches skip the search, there are no page-wide DOM observers, and the build is minified.
+- **Optional Jev mode** (off by default): re-ranks candidates with TypeSafe's Jev model. Enable it and paste an API key in the toolbar popup.
 
 ## How It Works
 
-The extension operates primarily through a content script (`src/pages/Content/index.js`) injected into YouTube video pages:
+| Step | Where |
+|---|---|
+| Read video metadata from YouTube's InnerTube API (zh-CN + en titles, real length) | `src/pages/Content/modules/youtube.js` |
+| Build search queries and search Bilibili in parallel through the service worker | `modules/queries.js`, `modules/bilibili.js`, `src/pages/Background/modules/bilibiliApi.js` |
+| Rank candidates and decide whether to auto-select | `modules/match.js`, `modules/text.js` (`src/shared/jev.js` in Jev mode) |
+| Fetch danmaku and sponsor segments, build the time mapping | `bilibiliApi.js`, `sponsorApi.js`, `modules/alignment.js` |
+| Filter and render on a canvas inside the player | `modules/danmakuFilter.js`, `modules/renderer.js` |
+| Side panel (shadow DOM) | `src/containers/DanmakuPanel/` |
 
-1.  **Initialization (`Content/index.js`):**
-    *   When a YouTube video page loads, the content script waits for essential YouTube player elements to be ready (`waitForYouTubeInit`).
-    *   It loads any saved user settings (font size, speed, etc.) and the danmaku toggle state for the current video from `chrome.storage.local`.
+The service worker handles everything Bilibili needs: the `buvid3` cookie, WBI request signing and the Referer header.
 
-2.  **YouTube Video Data Extraction (`youtube.js`):**
-    *   The `extractYouTubeVideoData` function scrapes the current YouTube page for:
-        *   Video Title (attempts to find a cleaner version, potentially extracting Chinese titles from brackets: 【】, [], （）, ()).
-        *   Full Video Title.
-        *   Channel Name.
-        *   Video Duration.
+## Matching eval
 
-3.  **Bilibili Video Search & Matching:**
-    *   **API Communication (`bilibili.js` via Background Script):**
-        *   All Bilibili API calls (search, video details, danmaku XML) are routed through the extension's background script using `chrome.runtime.sendMessage`. This helps manage network requests and potential CORS issues.
-    *   **Search (`bilibili.js` - `searchBili`):**
-        *   The extracted YouTube title and channel name are used to search Bilibili's API.
-        *   Results are scored based on title and author similarity to the YouTube video.
-    *   **Detailed Info & CID Fetching (`bilibili.js` - `getBilibiliVideoDetails`):**
-        *   For promising search results, more detailed video information is fetched from Bilibili, crucially obtaining the `cid` (Comment ID) required for fetching danmaku.
-    *   **Best Match Selection (`match.js` - `findBestMatch`):**
-        *   A sophisticated matching algorithm (`findBestMatch` from `src/pages/Content/modules/match.js`) compares the YouTube video data (title, duration, author) against the fetched Bilibili search results.
-        *   It calculates similarity scores for titles (with normalization and tokenization for Chinese and English text), authors, and durations.
-        *   A weighted final score determines the best Bilibili match, considering bonuses for strong author or title similarity.
+`eval/` holds a held-out benchmark of real YouTube videos from 28 channels, with ground-truth Bilibili counterparts. The labels were built without the matcher and checked by hand. All requests are cached, so the eval replays offline:
 
-4.  **Danmaku Fetching & Processing:**
-    *   **Fetch (`bilibili.js` - `fetchDanmaku`):**
-        *   Once a confident match with a `cid` is found, the corresponding danmaku XML file is fetched from `comment.bilibili.com`.
-        *   The XML is parsed to extract individual danmaku comments, their timestamps, and modes (filtering for standard scrolling comments).
-    *   **Storage:** The fetched `danmakuList` is stored in the content script for the current video session.
-
-5.  **User Interface & Interaction (`Content/index.js`):**
-    *   **Match Notification & Controls (`DanmakuMatchPopup/DanmakuMatchPopup.jsx`):**
-        *   A React component is rendered on the YouTube page to display information about the matched Bilibili video (thumbnail, title, author, view count, date).
-        *   It provides a toggle switch to enable/disable the danmaku overlay. The state of this toggle is saved per video ID in `chrome.storage.local`.
-        *   It includes a button to expand/collapse the settings panel.
-    *   **Danmaku Settings (`DanmakuSettings/DanmakuSettings.jsx`):**
-        *   This React component, nested within the match popup, allows users to customize:
-            *   Font Size
-            *   Speed
-            *   Opacity
-            *   Density
-        *   Changes are communicated back to `Content/index.js`, saved to `chrome.storage.local`, and applied to the live danmaku overlay.
-    *   **Danmaku Overlay Rendering (`Content/index.js` using `danmaku` library):**
-        *   If danmaku is enabled, an overlay `div` is created above the YouTube video player.
-        *   The `danmaku` library (from `weizhenye/Danmaku`) is instantiated with this container, the YouTube `<video>` element, and the processed list of comments.
-        *   The library handles rendering comments on a canvas, synchronizing them with video playback (play, pause, seek), and resizing the overlay.
-        *   User settings (speed, opacity, font size, text shadow, density) are applied to the `danmaku` instance.
-
-6.  **Event Handling (`Content/index.js`):**
-    *   **Ad Detection:** The script monitors for YouTube ads and automatically hides/cleans up the danmaku overlay during ad playback, then restores it when the ad finishes.
-    *   **Video Navigation:** A `MutationObserver` watches for URL changes and YouTube player re-initializations. When the user navigates to a new video, the script cleans up the UI from the previous video and re-runs the matching and display process for the new one.
-    *   **Settings Persistence:** User-defined settings are saved via `chrome.storage.local.set` and loaded via `chrome.storage.local.get`.
-
-7.  **Browser Action Popup (`Popup/Popup.jsx`):**
-    *   A simple popup accessed by clicking the extension icon in the Chrome toolbar.
-    *   Currently, it displays a generic React template and a placeholder for danmaku count. It's not directly involved in the on-page danmaku rendering but could be expanded for global settings or stats.
-
+```bash
+npm run eval                      # top-1 / top-3 / auto-select accuracy, dev and test splits
+npm run eval -- --split dev --verbose
+TYPESAFE_API_KEY=... npm run eval -- --jev   # compare Jev mode
+```
 
 ## Installation
 
@@ -157,7 +113,7 @@ npm start
 
 ### Other Development Scripts
 ```bash
-# Run tests (if configured)
+# Unit tests
 npm test
 
 # Lint code

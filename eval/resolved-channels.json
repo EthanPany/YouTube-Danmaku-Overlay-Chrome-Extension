@@ -1,0 +1,322 @@
+[
+  {
+    "id": "geekerwan",
+    "youtube": {
+      "channelId": "UCeUJO1H3TEXu2syfAAPjYKQ",
+      "title": "极客湾Geekerwan"
+    },
+    "bilibili": {
+      "mid": 25876945,
+      "name": "极客湾Geekerwan",
+      "fans": 5645394
+    }
+  },
+  {
+    "id": "zhongwenze",
+    "youtube": {
+      "channelId": "UCT1YrR_CLpwosODYagzhm7Q",
+      "title": "钟文泽"
+    },
+    "bilibili": {
+      "mid": 25910292,
+      "name": "钟文泽",
+      "fans": 2430739
+    }
+  },
+  {
+    "id": "daerduotv",
+    "youtube": {
+      "channelId": "UCD_cg9Tak9SvlPHRsWxUIpA",
+      "title": "大耳朵TV"
+    },
+    "bilibili": {
+      "mid": 286187082,
+      "name": "大耳朵TV",
+      "fans": 1134125
+    }
+  },
+  {
+    "id": "ltt",
+    "youtube": {
+      "channelId": "UCXuqSBlHAE6Xw-yeJA0Tunw",
+      "title": "Linus Tech Tips"
+    },
+    "bilibili": null
+  },
+  {
+    "id": "laptoprepair",
+    "youtube": {
+      "channelId": "UCgaTQ4N7-Q50UTLkYSHslCQ",
+      "title": "笔记本维修厮"
+    },
+    "bilibili": {
+      "mid": 382666849,
+      "name": "笔记本维修厮",
+      "fans": 1164117
+    }
+  },
+  {
+    "id": "links",
+    "youtube": {
+      "channelId": "UCz0ONCn6eRcDJGsUzupc3TA",
+      "title": "Links TV"
+    },
+    "bilibili": {
+      "mid": 3816626,
+      "name": "Linksphotograph",
+      "fans": 4889897
+    }
+  },
+  {
+    "id": "laorou",
+    "youtube": {
+      "channelId": "UC5DGiN7-nlPno2kjHUdcdCg",
+      "title": "老肉雜談"
+    },
+    "bilibili": {
+      "mid": 510941798,
+      "name": "老肉杂谈",
+      "fans": 423023
+    }
+  },
+  {
+    "id": "testv",
+    "youtube": {
+      "channelId": "UC9v3JGut2Z1PxrXEpGzgEAA",
+      "title": "TESTV"
+    },
+    "bilibili": {
+      "mid": 11336264,
+      "name": "TESTV官方频道",
+      "fans": 2593502
+    }
+  },
+  {
+    "id": "jipingyehua",
+    "youtube": {
+      "channelId": "UCWr9BHTzmwei1KEfPY5pOTA",
+      "title": "机坪夜话"
+    },
+    "bilibili": {
+      "mid": 489535836,
+      "name": "机坪夜话",
+      "fans": 313074
+    }
+  },
+  {
+    "id": "bibar",
+    "youtube": {
+      "channelId": "UCX570jPQVN8N5ejnF6UkrRA",
+      "title": "笔吧评测室"
+    },
+    "bilibili": {
+      "mid": 367877,
+      "name": "笔吧评测室",
+      "fans": 2812509
+    }
+  },
+  {
+    "id": "mkbhd",
+    "youtube": {
+      "channelId": "UCBJycsmduvYEL83R_U4JriQ",
+      "title": "Marques Brownlee"
+    },
+    "bilibili": null
+  },
+  {
+    "id": "rx",
+    "youtube": {
+      "channelId": "UCu9r3C84LJG1KA-MrUHcuJA",
+      "title": "RX不止飞行"
+    },
+    "bilibili": {
+      "mid": 396593694,
+      "name": "RX不止飞行",
+      "fans": 281728
+    }
+  },
+  {
+    "id": "shenmiyuan",
+    "youtube": {
+      "channelId": "UCzg-okYVOv2SGRBeCTy-psg",
+      "title": "神祕園"
+    },
+    "bilibili": {
+      "mid": 87670515,
+      "name": "神秘园",
+      "fans": 2894666
+    }
+  },
+  {
+    "id": "mediastorm",
+    "youtube": {
+      "channelId": "UC2cRwTuSWxxEtrRnT4lrlQA",
+      "title": "Mediastorm影视飓风"
+    },
+    "bilibili": {
+      "mid": 946974,
+      "name": "影视飓风",
+      "fans": 18840639
+    }
+  },
+  {
+    "id": "hetongxue",
+    "youtube": {
+      "channelId": "UCP5Kd0smdWe9H_bDH-73c6Q",
+      "title": "HTX Studio"
+    },
+    "bilibili": {
+      "mid": 163637592,
+      "name": "老师好我叫何同学",
+      "fans": 13058139
+    }
+  },
+  {
+    "id": "xiaolin",
+    "youtube": {
+      "channelId": "UCilwQlk62k1z7aUEZPOB6yw",
+      "title": "小Lin说"
+    },
+    "bilibili": {
+      "mid": 520819684,
+      "name": "小Lin说",
+      "fans": 7580402
+    }
+  },
+  {
+    "id": "papi",
+    "youtube": {
+      "channelId": "UCgHXsynhD8GxbFcNlPEn-_w",
+      "title": "Papi酱"
+    },
+    "bilibili": {
+      "mid": 1532165,
+      "name": "papi酱",
+      "fans": 9497165
+    }
+  },
+  {
+    "id": "banfo",
+    "youtube": {
+      "channelId": "UCyO-Rh1EX_6VNn3RKPeJ6kQ",
+      "title": "Banfoxianren's Official Channel"
+    },
+    "bilibili": {
+      "mid": 37663924,
+      "name": "硬核的半佛仙人",
+      "fans": 7714163
+    }
+  },
+  {
+    "id": "chaping",
+    "youtube": {
+      "channelId": "UCqlQ5ErufqtQUhkuKj1xngg",
+      "title": "差评君"
+    },
+    "bilibili": {
+      "mid": 19319172,
+      "name": "差评君",
+      "fans": 3385523
+    }
+  },
+  {
+    "id": "liyongle",
+    "youtube": {
+      "channelId": "UCvNxfitQbWkmLuCd44UfrYQ",
+      "title": "李永乐老师"
+    },
+    "bilibili": {
+      "mid": 9458053,
+      "name": "李永乐老师官方",
+      "fans": 3488609
+    }
+  },
+  {
+    "id": "linyi",
+    "youtube": {
+      "channelId": "UC4dtpugIYK56S_7btf5a-iQ",
+      "title": "林亦LYi"
+    },
+    "bilibili": {
+      "mid": 4401694,
+      "name": "林亦LYi",
+      "fans": 1398348
+    }
+  },
+  {
+    "id": "kejimeixue",
+    "youtube": {
+      "channelId": "UCAC204niCVvtDRDFYSiK7Cg",
+      "title": "科技美学"
+    },
+    "bilibili": {
+      "mid": 3766866,
+      "name": "科技美学",
+      "fans": 4471668
+    }
+  },
+  {
+    "id": "shipindao",
+    "youtube": {
+      "channelId": "UCYYovKIet5sKaudarGUneYw",
+      "title": "食贫道"
+    },
+    "bilibili": {
+      "mid": 39627524,
+      "name": "食贫道",
+      "fans": 9734154
+    }
+  },
+  {
+    "id": "wushi",
+    "youtube": {
+      "channelId": "UC55ahPQ7m5iJdVWcOfmuE6g",
+      "title": "巫师财经"
+    },
+    "bilibili": {
+      "mid": 472747194,
+      "name": "巫师财经",
+      "fans": 4413525
+    }
+  },
+  {
+    "id": "3b1b",
+    "youtube": {
+      "channelId": "UCYO_jab_esuFRV4b17AJtAw",
+      "title": "3Blue1Brown"
+    },
+    "bilibili": {
+      "mid": 88461692,
+      "name": "3Blue1Brown",
+      "fans": 2777702
+    }
+  },
+  {
+    "id": "kurzgesagt",
+    "youtube": {
+      "channelId": "UCsXVk37bltHxD1rDPwtNM8Q",
+      "title": "Kurzgesagt – In a Nutshell"
+    },
+    "bilibili": null
+  },
+  {
+    "id": "laogao",
+    "youtube": {
+      "channelId": "UCMUnInmOkrWN4gof9KlhNmQ",
+      "title": "老高與小茉 Mr & Mrs Gao"
+    },
+    "bilibili": null
+  },
+  {
+    "id": "aifou",
+    "youtube": {
+      "channelId": "UC6ISXkvMtP_Je1ITiYIJSSA",
+      "title": "爱否科技"
+    },
+    "bilibili": {
+      "mid": 7458285,
+      "name": "爱否科技FView",
+      "fans": 1163406
+    }
+  }
+]

@@ -1,0 +1,173 @@
+{
+  "_doc": "Eval channel pairs. ytQuery resolves the YouTube channel; biliUser resolves the Bilibili uploader (official) or is null for channels only reuploaded by fans. split: dev = used for tuning, test = held out, only scored. Never read by src/.",
+  "channels": [
+    {
+      "id": "geekerwan",
+      "ytQuery": "极客湾Geekerwan",
+      "biliUser": "极客湾Geekerwan",
+      "split": "dev"
+    },
+    {
+      "id": "zhongwenze",
+      "ytQuery": "钟文泽",
+      "biliUser": "钟文泽",
+      "split": "dev"
+    },
+    {
+      "id": "daerduotv",
+      "ytQuery": "大耳朵TV",
+      "biliUser": "大耳朵TV",
+      "split": "test"
+    },
+    {
+      "id": "ltt",
+      "ytQuery": "Linus Tech Tips",
+      "biliUser": null,
+      "split": "dev"
+    },
+    {
+      "id": "laptoprepair",
+      "ytQuery": "笔记本维修厮",
+      "biliUser": "笔记本维修厮",
+      "split": "test"
+    },
+    {
+      "id": "links",
+      "ytQuery": "Links TV",
+      "biliUser": "Linksphotograph",
+      "split": "dev"
+    },
+    {
+      "id": "laorou",
+      "ytQuery": "老肉杂谈",
+      "biliUser": "老肉杂谈",
+      "split": "test"
+    },
+    {
+      "id": "testv",
+      "ytQuery": "TESTV",
+      "biliUser": "TESTV官方频道",
+      "split": "dev"
+    },
+    {
+      "id": "jipingyehua",
+      "ytQuery": "机坪夜话",
+      "biliUser": "机坪夜话",
+      "split": "test"
+    },
+    {
+      "id": "bibar",
+      "ytQuery": "笔吧评测室",
+      "biliUser": "笔吧评测室",
+      "split": "dev"
+    },
+    {
+      "id": "mkbhd",
+      "ytQuery": "Marques Brownlee",
+      "biliUser": null,
+      "split": "test"
+    },
+    {
+      "id": "rx",
+      "ytQuery": "RX不止飞行",
+      "biliUser": "RX不止飞行",
+      "split": "dev"
+    },
+    {
+      "id": "shenmiyuan",
+      "ytQuery": "神秘园",
+      "biliUser": "神秘园",
+      "split": "test"
+    },
+    {
+      "id": "mediastorm",
+      "ytQuery": "影视飓风 Mediastorm",
+      "biliUser": "影视飓风",
+      "split": "dev"
+    },
+    {
+      "id": "hetongxue",
+      "ytQuery": "老师好我叫何同学",
+      "biliUser": "老师好我叫何同学",
+      "split": "test"
+    },
+    {
+      "id": "xiaolin",
+      "ytQuery": "小Lin说",
+      "biliUser": "小Lin说",
+      "split": "dev"
+    },
+    {
+      "id": "papi",
+      "ytQuery": "papi酱",
+      "biliUser": "papi酱",
+      "split": "test"
+    },
+    {
+      "id": "banfo",
+      "ytQuery": "硬核的半佛仙人",
+      "biliUser": "硬核的半佛仙人",
+      "split": "dev"
+    },
+    {
+      "id": "chaping",
+      "ytQuery": "差评君",
+      "biliUser": "差评君",
+      "split": "test"
+    },
+    {
+      "id": "liyongle",
+      "ytQuery": "李永乐老师",
+      "biliUser": "李永乐老师官方",
+      "split": "dev"
+    },
+    {
+      "id": "linyi",
+      "ytQuery": "林亦LYi",
+      "biliUser": "林亦LYi",
+      "split": "test"
+    },
+    {
+      "id": "kejimeixue",
+      "ytQuery": "科技美学",
+      "biliUser": "科技美学",
+      "split": "dev"
+    },
+    {
+      "id": "shipindao",
+      "ytQuery": "食贫道",
+      "biliUser": "食贫道",
+      "split": "test"
+    },
+    {
+      "id": "wushi",
+      "ytQuery": "巫师财经",
+      "biliUser": "巫师财经",
+      "split": "dev"
+    },
+    {
+      "id": "3b1b",
+      "ytQuery": "3Blue1Brown",
+      "biliUser": "3Blue1Brown",
+      "split": "test"
+    },
+    {
+      "id": "kurzgesagt",
+      "ytQuery": "Kurzgesagt",
+      "biliUser": null,
+      "split": "dev"
+    },
+    {
+      "id": "laogao",
+      "ytQuery": "老高與小茉 Mr & Mrs Gao",
+      "biliUser": null,
+      "split": "test"
+    },
+    {
+      "id": "aifou",
+      "ytQuery": "爱否科技",
+      "biliUser": "爱否科技FView",
+      "split": "test"
+    }
+  ]
+}

@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-10-28
+
+### Added
+- Multi-query Bilibili search with ranked candidates, confidence-gated auto-selection, manual search and BV/link paste
+- Side panel with Match / Display / Filter / Sync tabs that collapses into a draggable edge tab
+- Danmaku colors, sizes and top/bottom modes; smart-block level, keyword/regex blocking, duplicate merging, per-second cap
+- Sponsor-aware timeline alignment (SponsorBlock, BilibiliSponsorBlock, 空降/ad-talk detection) and per-video offset
+- Protobuf danmaku segments merged with the XML pool
+- Optional Jev (TypeSafe) re-ranking, off by default
+- Matching eval set and harness (`eval/`), unit tests
+
+### Changed
+- Content script runs on all YouTube pages and follows SPA navigation via `yt-navigate-finish`
+- Bilibili requests use WBI signing and a real buvid3 cookie
+
+### Removed
+- Legacy CommentCoreLibrary scripts and unused boilerplate pages
+
 ## [1.0.0] - 2024-03-14
 
 ### Added

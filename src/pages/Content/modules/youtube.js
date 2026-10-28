@@ -53,9 +53,14 @@ export async function fetchPlayerDetails(videoId, hl, fetchImpl = fetch) {
         }),
     });
     if (!res.ok) return null;
-    const details = (await res.json())?.videoDetails;
+    const json = await res.json();
+    const details = json?.videoDetails;
     if (!details || details.videoId !== videoId) return null;
-    return { ...details, lengthSeconds: Number(details.lengthSeconds) || 0 };
+    return {
+        ...details,
+        lengthSeconds: Number(details.lengthSeconds) || 0,
+        publishDate: json.microformat?.playerMicroformatRenderer?.publishDate || null,
+    };
 }
 
 /** DOM fallback for when InnerTube is unavailable. */
@@ -83,6 +88,7 @@ function readDom() {
  * @property {string} channel
  * @property {number} duration  seconds (0 if unknown)
  * @property {string} description
+ * @property {string|null} publishDate  ISO date of the YouTube upload
  */
 
 /** @returns {Promise<YouTubeMeta>} */
@@ -101,6 +107,7 @@ export async function getYouTubeMetadata(videoId, { fetchImpl = fetch, useDom = 
         channel: primary.author || dom.channel || '',
         duration: primary.lengthSeconds || dom.duration || 0,
         description: primary.shortDescription || '',
+        publishDate: primary.publishDate || null,
     };
 }
 

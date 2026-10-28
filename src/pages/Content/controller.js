@@ -11,7 +11,8 @@ import { STORAGE_KEYS } from '../../shared/constants';
 import { parseVideoRef } from '../../shared/videoRef';
 import { log } from '../../shared/log';
 import { getYouTubeMetadata, getPlayerElement, getVideoElement } from './modules/youtube';
-import { searchForYouTube, manualSearch, getVideoView, getDanmaku, getSponsorSegments, pickPage } from './modules/bilibili';
+import { searchForYouTube, manualSearch, getVideoView, getDanmaku, getSponsorSegments, pickPage, jevRank } from './modules/bilibili';
+import { buildJevRequest, applyJevResponse } from '../../shared/jev';
 import { isConfident, scoreCandidate } from './modules/match';
 import { prepareComments } from './modules/danmakuFilter';
 import { planAlignment, createTimeMap } from './modules/alignment';
@@ -20,7 +21,7 @@ import { DanmakuRenderer, toLibraryComments } from './modules/renderer';
 /** Settings that the renderer can apply without rebuilding comments. */
 const LIVE_KEYS = new Set(['opacity', 'area', 'scrollSeconds']);
 /** Settings that don't affect the overlay at all. */
-const UI_KEYS = new Set(['autoCollapsePanel', 'panelTop', 'enabled']);
+const UI_KEYS = new Set(['autoCollapsePanel', 'panelTop', 'enabled', 'jevEnabled', 'jevApiKey']);
 const REBUILD_DEBOUNCE_MS = 150;
 
 const initialState = () => ({
@@ -32,6 +33,7 @@ const initialState = () => ({
     candidates: [], // ranked automatic results
     candidatesLoaded: false,
     candidatesLoading: false,
+    jev: null, // Jev verdict when Jev mode is on
     search: { query: '', loading: false, results: null, error: '' },
     match: null, // { view, page, score, breakdown, manual }
     danmaku: { loading: false, source: '', total: 0, shown: 0 },
@@ -116,7 +118,7 @@ export class Controller {
             await this.findCandidates(gen);
             if (!this.isCurrent(gen)) return;
             const best = this.state.candidates[0];
-            if (best && isConfident(best)) {
+            if (best && this.shouldAutoAccept(best)) {
                 const view = await getVideoView({ bvid: best.bvid });
                 if (!this.isCurrent(gen)) return;
                 await this.useMatch(gen, view, { manual: false, score: best.score, breakdown: best.breakdown });
@@ -140,13 +142,34 @@ export class Controller {
         this.setState({ candidatesLoading: true });
         const started = performance.now();
         try {
-            const { queries, ranked } = await searchForYouTube(yt);
+            const { queries, ranked: heuristic } = await searchForYouTube(yt);
             if (!this.isCurrent(gen)) return;
-            log.debug(`Search took ${Math.round(performance.now() - started)} ms`, queries, ranked.slice(0, 5));
-            this.setState({ queries, candidates: ranked.slice(0, 10), candidatesLoaded: true });
+            const { ranked, jev } = await this.maybeJevRerank(yt, heuristic);
+            if (!this.isCurrent(gen)) return;
+            log.debug(`Search took ${Math.round(performance.now() - started)} ms`, queries, ranked.slice(0, 5), jev);
+            this.setState({ queries, candidates: ranked.slice(0, 10), candidatesLoaded: true, jev });
         } finally {
             if (this.isCurrent(gen)) this.setState({ candidatesLoading: false });
         }
+    }
+
+    /** Jev mode (off by default): let TypeSafe Jev re-rank the top candidates. */
+    async maybeJevRerank(yt, ranked) {
+        const { jevEnabled, jevApiKey } = this.state.settings;
+        if (!jevEnabled || !jevApiKey || ranked.length === 0) return { ranked, jev: null };
+        try {
+            const response = await jevRank(buildJevRequest(yt, ranked), jevApiKey);
+            return applyJevResponse(ranked, response);
+        } catch (err) {
+            log.warn('Jev re-rank failed, using heuristic ranking', err);
+            return { ranked, jev: null };
+        }
+    }
+
+    shouldAutoAccept(best) {
+        const { jev } = this.state;
+        if (jev) return jev.accept && jev.choice === best.bvid;
+        return isConfident(this.state.candidates);
     }
 
     /** Loads danmaku + sponsor segments for a chosen video and renders. */

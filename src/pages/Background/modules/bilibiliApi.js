@@ -53,7 +53,7 @@ export function ensureBuvid(force = false) {
 export async function installRefererRule() {
     if (!chrome.declarativeNetRequest) return;
     await chrome.declarativeNetRequest.updateSessionRules({
-        removeRuleIds: [1],
+        removeRuleIds: [1, 2],
         addRules: [
             {
                 id: 1,
@@ -64,6 +64,20 @@ export async function installRefererRule() {
                 },
                 condition: {
                     requestDomains: ['api.bilibili.com', 'comment.bilibili.com'],
+                    initiatorDomains: [chrome.runtime.id],
+                    resourceTypes: ['xmlhttprequest'],
+                },
+            },
+            {
+                // The uploader-archive endpoint expects to be called from a space page.
+                id: 2,
+                priority: 2,
+                action: {
+                    type: 'modifyHeaders',
+                    requestHeaders: [{ header: 'referer', operation: 'set', value: 'https://space.bilibili.com/' }],
+                },
+                condition: {
+                    urlFilter: '||api.bilibili.com/x/series/',
                     initiatorDomains: [chrome.runtime.id],
                     resourceTypes: ['xmlhttprequest'],
                 },
@@ -101,11 +115,16 @@ async function signedUrl(path, params) {
 
 const HTML_ENTITIES = { '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'", '&nbsp;': ' ' };
 
+/** Decodes the named and numeric (&#39; &#x27;) entities Bilibili leaves in titles. */
+export function decodeEntities(text = '') {
+    return text
+        .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
+        .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16)))
+        .replace(/&(amp|lt|gt|quot|nbsp);/g, (m) => HTML_ENTITIES[m]);
+}
+
 export function cleanSearchTitle(title = '') {
-    return title
-        .replace(/<[^>]+>/g, '') // <em class="keyword"> highlights
-        .replace(/&(amp|lt|gt|quot|nbsp|#39);/g, (m) => HTML_ENTITIES[m])
-        .trim();
+    return decodeEntities(title.replace(/<[^>]+>/g, '')).trim(); // strip <em class="keyword"> highlights
 }
 
 /** "1:02:03" | "14:53" | number -> seconds */
@@ -117,7 +136,7 @@ export function parseClock(value) {
         .reduce((acc, part) => acc * 60 + (parseInt(part, 10) || 0), 0);
 }
 
-function normalizeSearchItem(v) {
+export function normalizeSearchItem(v) {
     return {
         bvid: v.bvid,
         aid: v.aid,
@@ -129,40 +148,89 @@ function normalizeSearchItem(v) {
         play: v.play || 0,
         danmaku: v.video_review || v.danmaku || 0,
         pubdate: v.pubdate || 0,
-        description: v.description || '',
+        description: decodeEntities(v.description || ''),
         tag: v.tag || '',
     };
 }
 
-async function searchOnce(keyword, page) {
-    const params = { search_type: 'video', keyword, page };
+async function searchOnce(params) {
     let json;
     try {
         json = await fetchJson(await signedUrl('/x/web-interface/wbi/search/type', params));
     } catch (err) {
         // WBI keys/endpoint failure: the legacy endpoint still answers with buvid3.
-        const qs = new URLSearchParams(params).toString();
-        json = await fetchJson(`${API}/x/web-interface/search/type?${qs}`);
+        json = await fetchJson(`${API}/x/web-interface/search/type?${new URLSearchParams(params)}`);
     }
     return json;
 }
 
-/**
- * @param {string} keyword
- * @returns {Promise<Array<object>>} normalized video results
- */
-export async function searchVideos(keyword, page = 1) {
+/** Search with one cookie rotation on risk control; returns `data`. */
+async function searchRaw(params) {
     await ensureBuvid();
     return limit(async () => {
-        let json = await searchOnce(keyword, page).catch((e) => ({ code: e.status === 412 ? -412 : -1 }));
-        if (json.code === -412) {
-            // Cookie got flagged; rotate it once and retry.
+        let json = await searchOnce(params).catch((e) => ({ code: e.status === 412 ? -412 : -1 }));
+        // Risk control answers 412, or code 0 with only a captcha voucher.
+        if (json.code === -412 || json.data?.v_voucher) {
             await ensureBuvid(true);
-            json = await searchOnce(keyword, page);
+            json = await searchOnce(params);
         }
+        if (json.data?.v_voucher) throw new Error('Bilibili is rate-limiting searches. Try again in a minute.');
         if (json.code !== 0) throw new Error(`Search failed (${json.code}): ${json.message || ''}`);
-        return (json.data?.result || []).filter((v) => v.type === 'video' && v.bvid).map(normalizeSearchItem);
+        return json.data || {};
     });
+}
+
+/**
+ * @param {string} keyword
+ * @param {{duration?: 1|2|3|4}} [filters] duration bucket: <10, 10-30, 30-60, >60 min
+ * @returns {Promise<Array<object>>} normalized video results
+ */
+export async function searchVideos(keyword, filters = {}) {
+    const params = { search_type: 'video', keyword, page: 1 };
+    if (filters.duration) params.duration = filters.duration;
+    const data = await searchRaw(params);
+    return (data.result || []).filter((v) => v.type === 'video' && v.bvid).map(normalizeSearchItem);
+}
+
+const userSearchCache = new Map();
+
+/** Bilibili uploader search: [{mid, name, fans}]. Cached: one lookup per channel. */
+export async function searchUsers(keyword) {
+    if (userSearchCache.has(keyword)) return userSearchCache.get(keyword);
+    const data = await searchRaw({ search_type: 'bili_user', keyword, page: 1 });
+    const users = (data.result || []).map((u) => ({ mid: u.mid, name: u.uname, fans: u.fans || 0 }));
+    userSearchCache.set(keyword, users);
+    return users;
+}
+
+const uploaderCache = new Map();
+
+/** An uploader's most recent uploads (newest first), normalized like search results. */
+export async function getUploaderVideos(mid, name = '') {
+    const cachedEntry = uploaderCache.get(mid);
+    if (cachedEntry && Date.now() - cachedEntry.ts < 10 * 60 * 1000) return cachedEntry.list;
+    const json = await limit(() => fetchJson(`${API}/x/series/recArchivesByKeywords?mid=${mid}&keywords=&ps=50&pn=1`));
+    if (json.code !== 0) throw new Error(`Uploader list failed (${json.code}): ${json.message || ''}`);
+    const list = (json.data?.archives || []).map((a) => normalizeArchive(a, mid, name));
+    uploaderCache.set(mid, { ts: Date.now(), list });
+    return list;
+}
+
+export function normalizeArchive(a, mid, name) {
+    return {
+        bvid: a.bvid,
+        aid: a.aid,
+        title: a.title,
+        author: name,
+        mid,
+        duration: a.duration,
+        pic: a.pic?.replace(/^http:/, 'https:'),
+        play: a.stat?.view || 0,
+        danmaku: a.stat?.danmaku || 0,
+        pubdate: a.pubdate,
+        description: '',
+        tag: '',
+    };
 }
 
 // ---------------------------------------------------------------------------
@@ -258,7 +326,7 @@ async function fetchXml(cid) {
             id: p[7],
             weight: p[8] !== undefined ? +p[8] : 10,
             attr: 0,
-            content: m[2].replace(/&(amp|lt|gt|quot|nbsp|#39);/g, (e) => HTML_ENTITIES[e]),
+            content: decodeEntities(m[2]),
         });
     }
     return out;

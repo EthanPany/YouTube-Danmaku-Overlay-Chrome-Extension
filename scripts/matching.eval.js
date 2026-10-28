@@ -68,18 +68,17 @@ test('live matching evaluation', async () => {
         const t0 = Date.now();
         const { queries, ranked } = await searchForYouTube(yt, biliSearch);
         const ms = Date.now() - t0;
-        const best = ranked[0];
         const lines = [
             `\n=== ${id}  [${yt.channel}]  ${fmt(yt.duration)}`,
             ...yt.titles.map((t) => `  title: ${t}`),
             `  queries: ${JSON.stringify(queries)}  (${ms} ms, ${ranked.length} candidates)`,
             ...ranked.slice(0, 3).map(
                 (c, i) =>
-                    `  ${i === 0 ? (isConfident(c) ? 'AUTO' : 'ask ') : '    '} ${c.score.toFixed(2)} t=${c.breakdown.title.toFixed(2)} d=${c.breakdown.duration.toFixed(2)} a=${c.breakdown.author.toFixed(2)}  ${fmt(c.duration)}  ${c.bvid}  ${c.author} | ${c.title}`
+                    `  ${i === 0 ? (isConfident(ranked) ? 'AUTO' : 'ask ') : '    '} ${c.score.toFixed(2)} t=${c.breakdown.title.toFixed(2)} d=${c.breakdown.duration.toFixed(2)} a=${c.breakdown.author.toFixed(2)}  ${fmt(c.duration)}  ${c.bvid}  ${c.author} | ${c.title}`
             ),
         ];
         console.log(lines.join('\n'));
-        summary.push({ id, auto: !!best && isConfident(best), ms });
+        summary.push({ id, auto: isConfident(ranked), ms });
         await new Promise((r) => setTimeout(r, 400));
     }
     const auto = summary.filter((s) => s.auto).length;

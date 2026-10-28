@@ -32,18 +32,45 @@ export function durationScore(ytSeconds, biliSeconds) {
     return Math.max(0, 1 - ratio * 3);
 }
 
+/**
+ * Similarity of two uploader/channel names (normalize()d). Handles the
+ * common "same name plus decoration" case: "李永乐老师" vs "李永乐老师官方",
+ * "mediastorm影视飓风" vs "影视飓风".
+ */
+export function nameSimilarity(a, b) {
+    if (!a || !b) return 0;
+    if (a === b) return 1;
+    const [short, long] = a.length <= b.length ? [a, b] : [b, a];
+    const compact = (x) => x.replace(/ /g, '');
+    if (compact(short).length >= 2 && compact(long).includes(compact(short))) return 0.9;
+    return textSimilarity(a, b);
+}
+
 export function authorScore(ytChannelNorm, candidate) {
     if (!ytChannelNorm) return 0;
     const author = normalize(candidate.author || candidate.owner?.name || '');
-    let score = textSimilarity(ytChannelNorm, author);
+    let score = nameSimilarity(ytChannelNorm, author);
     // Reuploaders usually credit the creator in the title or description.
     if (ytChannelNorm.length >= 2) {
         const title = normalize(candidate.title || '');
         const desc = normalize(candidate.description || '');
-        if (title.includes(ytChannelNorm)) score = Math.max(score, 0.8);
-        else if (desc.includes(ytChannelNorm)) score = Math.max(score, 0.6);
+        if (title.includes(ytChannelNorm)) score = Math.max(score, 0.6);
+        else if (desc.includes(ytChannelNorm)) score = Math.max(score, 0.5);
     }
     return score;
+}
+
+/**
+ * Upload-date agreement in [0, 1]: creators usually publish both versions
+ * within a day or two. Unknown dates score 0 (no evidence either way).
+ */
+export function dateScore(ytPublishDate, biliPubdate) {
+    const yt = ytPublishDate ? Date.parse(ytPublishDate) / 1000 : NaN;
+    if (!Number.isFinite(yt) || !biliPubdate) return 0;
+    const days = Math.abs(biliPubdate - yt) / 86400;
+    if (days <= 2) return 1;
+    if (days <= 7) return 0.5;
+    return 0;
 }
 
 /**
@@ -55,16 +82,16 @@ export function scoreCandidate(yt, candidate, prepared = prepareYouTube(yt)) {
     const title = Math.max(0, ...prepared.titles.map((t) => textSimilarity(t, biliTitle)));
     const duration = durationScore(yt.duration, candidate.duration);
     const author = authorScore(prepared.channel, candidate);
+    const date = dateScore(yt.publishDate, candidate.pubdate);
 
     let score = WEIGHTS.title * title + WEIGHTS.duration * duration + WEIGHTS.author * author;
+    // Same week and same length: strong evidence even when the title was rewritten.
+    score += 0.08 * date * duration;
 
     // Only the duration agrees: likely a coincidence, not the same video.
     if (title < 0.25 && author < 0.5) score *= 0.6;
     // Wildly different lengths: a compilation, clip or different cut.
     if (duration < 0.3) score *= 0.7;
-
-    score += Math.min(0.04, Math.log10((candidate.danmaku || 0) + 1) / 100);
-    score += Math.min(0.06, 0.02 * Math.max(0, (candidate.hits || 1) - 1));
 
     const linked =
         (yt.videoId && `${candidate.description || ''} ${candidate.title || ''}`.includes(yt.videoId)) ||
@@ -74,9 +101,17 @@ export function scoreCandidate(yt, candidate, prepared = prepareYouTube(yt)) {
     // so let a better-synced copy win if one exists.
     if (linked) score = Math.max(score, duration >= 0.5 ? 0.97 : 0.6);
 
+    // Tie-breakers between copies of the same video, applied after the
+    // floor so they still separate equally strong candidates: the creator's
+    // own upload, then the one with more danmaku, then broader agreement
+    // across queries. The score may exceed 1; display clamps it.
+    if (author >= 0.9) score += 0.04;
+    score += Math.min(0.04, Math.log10((candidate.danmaku || 0) + 1) / 100);
+    score += Math.min(0.06, 0.02 * Math.max(0, (candidate.hits || 1) - 1));
+
     return {
-        score: Math.min(1, score),
-        breakdown: { title, duration, author, linked: !!linked },
+        score,
+        breakdown: { title, duration, author, date, linked: !!linked },
     };
 }
 
@@ -96,11 +131,29 @@ export function rankCandidates(yt, candidates) {
         .sort((a, b) => b.score - a.score);
 }
 
-/** True when the ranked list's leader is good enough to use without asking. */
-export function isConfident(best) {
+/** Lead over the runner-up needed to trust a match whose title disagrees. */
+const CLEAR_LEAD = 0.1;
+
+/**
+ * True when the ranked list's leader is good enough to use without asking.
+ * A matching title (or an explicit link) is enough. When the title doesn't
+ * match (translated or retitled upload), the creator's own account plus a
+ * near-identical length must be corroborated by the upload date or by a
+ * clear lead over the runner-up: busy channels have many uploads of
+ * similar length.
+ * @param {Array<object>|object} ranked  ranked candidates (or just the leader)
+ */
+export function isConfident(ranked) {
+    const [best, runnerUp] = Array.isArray(ranked) ? ranked : [ranked];
     if (!best) return false;
-    const { title, author, linked } = best.breakdown;
-    return linked || (best.score >= AUTO_ACCEPT_SCORE && (title >= 0.3 || author >= 0.6));
+    const { title, author, duration, date, linked } = best.breakdown;
+    if (linked) return true;
+    if (best.score < AUTO_ACCEPT_SCORE) return false;
+    // A matching title with a very different length is another cut or a compilation.
+    if (duration < 0.3) return false;
+    if (title >= 0.3) return true;
+    const lead = best.score - (runnerUp?.score ?? 0);
+    return author >= 0.9 && duration >= 0.95 && (date >= 0.5 || lead >= CLEAR_LEAD);
 }
 
 /** Pools results of several queries, counting how many queries found each video. */
@@ -110,7 +163,7 @@ export function mergeResults(resultLists) {
         for (const item of list || []) {
             const existing = byId.get(item.bvid);
             if (existing) existing.hits += 1;
-            else byId.set(item.bvid, { ...item, hits: 1 });
+            else byId.set(item.bvid, { ...item, hits: item.hits || 1 });
         }
     }
     return [...byId.values()];
