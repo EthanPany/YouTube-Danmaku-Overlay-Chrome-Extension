@@ -18,6 +18,7 @@ npx jest test/matching.test.js -t "ranking"   # single file / test name
 npm run lint
 npm run eval         # score the matcher on eval/dataset.json (cached, offline-capable)
 npm run eval -- --split dev --verbose          # per-video failures (dev split only)
+npm run eval -- --jev  # also benchmark Jev; reads TYPESAFE_API_KEY from the git-ignored .env
 npm run eval:build   # (re)build the eval dataset from eval/channels.json
 npm run eval:match   # ad-hoc live matching run (scripts/matching.eval.js)
 npm run eval:align   # ad-hoc live alignment run (scripts/alignment.eval.js)
@@ -35,7 +36,7 @@ Three bundles (see `webpack.config.js`): content script, service worker, toolbar
 
 1. `modules/youtube.js` — metadata from InnerTube `/youtubei/v1/player` in zh-CN and en (original + localized titles, real duration). The DOM `<h1>` is a last resort: it can be YouTube's machine translation or stale after navigation.
 2. `modules/queries.js` → `modules/bilibili.js#searchForYouTube` — query variants in parallel, the main query again with Bilibili's duration-bucket filter, and the YouTube id (kept only if a result links it). Unless the creator's own upload already won on title, it then finds the creator's Bilibili account(s) through the uploader search (active accounts first) and adds their recent uploads. This catches retitled uploads.
-3. `modules/match.js` — scoring (title similarity over all title variants via `text.js`, duration, uploader, explicit links) and `isConfident` gating auto-selection. Optional Jev re-rank (`src/shared/jev.js`, off by default, needs a TypeSafe key).
+3. `modules/match.js` — scoring (title similarity over all title variants via `text.js`, duration, uploader, explicit links) and `isConfident` gating auto-selection. Optional Jev mode (`src/shared/jev.js`, off by default, needs a TypeSafe key): the heuristic ranking stays, and Jev's verdict only feeds auto-select via `hybridAutoAccept`.
 4. `modules/alignment.js` — maps Bilibili time → YouTube time around sponsor sections (SponsorBlock/BilibiliSponsorBlock segments fitted to the duration difference, else "空降"/ad-talk danmaku detection) plus per-video manual offset.
 5. `modules/danmakuFilter.js` — modes, smart-block weight, keyword/regex block, duplicate merge, per-second cap.
 6. `modules/renderer.js` — wraps the `danmaku` canvas library inside `#movie_player`; the library itself follows the `<video>` events.

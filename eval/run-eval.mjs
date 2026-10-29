@@ -4,7 +4,7 @@
  *
  *   npm run eval                         # heuristic matcher, dev + test
  *   npm run eval -- --split dev --verbose
- *   TYPESAFE_API_KEY=... npm run eval -- --jev   # Jev mode as well
+ *   npm run eval -- --jev                # Jev mode as well (key from .env)
  *
  * Uses the exact code the extension runs (src/), with Bilibili search
  * answered from the on-disk HTTP cache (fetched once if missing).
@@ -24,7 +24,7 @@ import { bili, cached, readJson, writeJson, EVAL_DIR, stats } from './lib/net.mj
 import { searchForYouTube } from '../src/pages/Content/modules/bilibili.js';
 import { isConfident } from '../src/pages/Content/modules/match.js';
 import { normalizeSearchItem, normalizeArchive, normalizeUser } from '../src/pages/Background/modules/bilibiliApi.js';
-import { buildJevRequest, applyJevResponse, callJev, JEV_TOP_K } from '../src/shared/jev.js';
+import { buildJevRequest, applyJevResponse, callJev, hybridAutoAccept, JEV_TOP_K } from '../src/shared/jev.js';
 import { sify } from 'chinese-conv/dist';
 
 const args = process.argv.slice(2);
@@ -114,11 +114,25 @@ async function main() {
         const { queries, ranked, uploader } = await searchForYouTube(yt, api);
         const heuristic = { ranked, auto: isConfident(ranked) };
         let jev = null;
+        let hybrid = null;
         if (JEV && ranked.length) {
             const out = await jevRerank(yt, ranked);
             jev = { ranked: out.ranked, auto: !!out.jev?.accept && out.jev.choice === out.ranked[0]?.bvid, verdict: out.jev, ms: out.ms };
+            hybrid = { ranked, auto: hybridAutoAccept(heuristic.auto, ranked[0]?.bvid, out.jev) };
         }
-        results.set(item.id, { heuristic, jev, queries });
+        results.set(item.id, { heuristic, jev, hybrid, queries });
+
+        // Jev has no tuning of its own, so its mistakes are printed for every split.
+        if (VERBOSE && jev) {
+            const correct = (c) => item.expected.includes(c?.bvid) || (!!c && equivalent(item, c));
+            const wrong = item.expected.length ? !correct(jev.ranked[0]) || (jev.auto && !correct(jev.ranked[0])) : jev.auto;
+            if (wrong) {
+                console.log(`\n[JEV ${item.expected.length ? 'MISS' : 'FALSE-AUTO'}] ${item.split} ${item.channel} ${yt.videoId} ${yt.duration}s expected ${item.expected.join(',') || '(none)'}`);
+                for (const t of yt.titles) console.log(`   yt: ${t}`);
+                console.log(`   verdict: ${JSON.stringify(jev.verdict)}`);
+                for (const c of jev.ranked.slice(0, 3)) console.log(`   ${correct(c) ? '✓' : '✗'} p${(c.jevProbability ?? 0).toFixed(2)} h${c.score.toFixed(2)} ${c.duration}s ${c.pubdate ? new Date(c.pubdate * 1000).toISOString().slice(0, 10) : '?'} ${c.bvid} ${c.author} | ${c.title.slice(0, 60)}`);
+            }
+        }
 
         if (VERBOSE && (item.split === 'dev' || flag('open-test'))) {
             const good = (c) => (item.expected.includes(c?.bvid) ? '✓' : equivalent(item, c) ? '≈' : '✗');
@@ -150,6 +164,7 @@ async function main() {
             report[split].jev = score(subset, jevPick);
             const ms = subset.map((i) => results.get(i.id).jev?.ms).filter(Boolean);
             report[split].jev.medianMs = ms.sort((a, b) => a - b)[Math.floor(ms.length / 2)];
+            report[split].hybrid = score(subset, (i) => results.get(i.id).hybrid || results.get(i.id).heuristic);
         }
     }
     console.log('\n' + JSON.stringify(report, null, 2));

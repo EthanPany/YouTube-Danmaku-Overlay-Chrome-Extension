@@ -12,7 +12,7 @@ import { parseVideoRef } from '../../shared/videoRef';
 import { log } from '../../shared/log';
 import { getYouTubeMetadata, getPlayerElement, getVideoElement } from './modules/youtube';
 import { searchForYouTube, manualSearch, getVideoView, getDanmaku, getSponsorSegments, pickPage, jevRank } from './modules/bilibili';
-import { buildJevRequest, applyJevResponse } from '../../shared/jev';
+import { buildJevRequest, applyJevResponse, hybridAutoAccept } from '../../shared/jev';
 import { isConfident, scoreCandidate } from './modules/match';
 import { prepareComments } from './modules/danmakuFilter';
 import { planAlignment, createTimeMap } from './modules/alignment';
@@ -144,32 +144,34 @@ export class Controller {
         try {
             const { queries, ranked: heuristic } = await searchForYouTube(yt);
             if (!this.isCurrent(gen)) return;
-            const { ranked, jev } = await this.maybeJevRerank(yt, heuristic);
+            const jev = await this.maybeJevVerdict(yt, heuristic);
             if (!this.isCurrent(gen)) return;
-            log.debug(`Search took ${Math.round(performance.now() - started)} ms`, queries, ranked.slice(0, 5), jev);
-            this.setState({ queries, candidates: ranked.slice(0, 10), candidatesLoaded: true, jev });
+            log.debug(`Search took ${Math.round(performance.now() - started)} ms`, queries, heuristic.slice(0, 5), jev);
+            this.setState({ queries, candidates: heuristic.slice(0, 10), candidatesLoaded: true, jev });
         } finally {
             if (this.isCurrent(gen)) this.setState({ candidatesLoading: false });
         }
     }
 
-    /** Jev mode (off by default): let TypeSafe Jev re-rank the top candidates. */
-    async maybeJevRerank(yt, ranked) {
+    /**
+     * Jev mode (off by default): ask TypeSafe Jev about the top candidates.
+     * The heuristic ranking is kept; the verdict only feeds auto-select
+     * (see hybridAutoAccept), which scored best in the eval.
+     */
+    async maybeJevVerdict(yt, ranked) {
         const { jevEnabled, jevApiKey } = this.state.settings;
-        if (!jevEnabled || !jevApiKey || ranked.length === 0) return { ranked, jev: null };
+        if (!jevEnabled || !jevApiKey || ranked.length === 0) return null;
         try {
             const response = await jevRank(buildJevRequest(yt, ranked), jevApiKey);
-            return applyJevResponse(ranked, response);
+            return applyJevResponse(ranked, response).jev;
         } catch (err) {
-            log.warn('Jev re-rank failed, using heuristic ranking', err);
-            return { ranked, jev: null };
+            log.warn('Jev failed, using the heuristic alone', err);
+            return null;
         }
     }
 
     shouldAutoAccept(best) {
-        const { jev } = this.state;
-        if (jev) return jev.accept && jev.choice === best.bvid;
-        return isConfident(this.state.candidates);
+        return hybridAutoAccept(isConfident(this.state.candidates), best.bvid, this.state.jev);
     }
 
     /** Loads danmaku + sponsor segments for a chosen video and renders. */

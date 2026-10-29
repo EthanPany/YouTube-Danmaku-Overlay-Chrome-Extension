@@ -216,10 +216,7 @@
     "0m0TMwAY1fc",
     "9aDmiIOBU34",
     "eyZEqSPeMwg",
-    "NiCgcUTL9_Q",
     "ONAuUyml0yI",
-    "JsBZOcqZerk",
-    "J1WoNuemKOg",
     "eYBEJBfq_Zs",
     "26P1KyvrmjI",
     "h0EGCnBjTVk",
@@ -391,14 +388,34 @@
     "expected": [
       "BV1ncxV6gEac",
       "BV1r3nr6BEqi",
-      "BV164nB6fEfu"
+      "BV164nB6fEfu",
+      "BV1fanB64EbU"
     ],
-    "note": "identical-title reuploads + machine-translated reupload with identical length"
+    "note": "identical-title reuploads + machine-translated reupload with identical length; + official Chinese channel Mrwhosetheboss中文 (same length, same day), found by Jev benchmark"
   },
   "nQdXp6HKKik": {
     "expected": [
       "BV1Sqpg6TEkH"
     ],
     "note": "Mrwhosetheboss中文 translated upload, identical length, same day (missed by negative check)"
+  },
+  "NiCgcUTL9_Q": {
+    "expected": [
+      "BV1vAnb6xEGF"
+    ],
+    "note": "official Chinese channel Veritasium真理元素, translated title (光纤背后无敌的工程), -86s = sponsor cut, +11 days; found by Jev benchmark, missed by exact-title labeling"
+  },
+  "JsBZOcqZerk": {
+    "expected": [
+      "BV1UrHB65Ehj"
+    ],
+    "note": "official Chinese channel Veritasium真理元素, translated title (纳粹恩尼格玛背后的工程), -84s = sponsor cut, +13 days; found by Jev benchmark, missed by exact-title labeling"
+  },
+  "J1WoNuemKOg": {
+    "expected": [
+      "BV1MYbw68EZq",
+      "BV1vX8m6TE1P"
+    ],
+    "note": "identical-title reupload + official Chinese channel Veritasium真理元素 (从3万米高空观看日食, -71s sponsor cut, +6 days); official copy found by Jev benchmark"
   }
 }
