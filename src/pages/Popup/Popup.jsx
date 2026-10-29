@@ -30,7 +30,7 @@ const Popup = () => {
                 <input type="checkbox" checked={settings.enabled} onChange={(e) => update({ enabled: e.target.checked })} />
             </label>
             <label className="row">
-                <span>Tuck panel into side tab when idle</span>
+                <span>Shrink panel to a corner button when idle</span>
                 <input
                     type="checkbox"
                     checked={settings.autoCollapsePanel}

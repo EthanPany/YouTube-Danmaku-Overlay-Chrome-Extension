@@ -101,8 +101,8 @@ const svg = (path) => (
 );
 
 export const Icons = {
-    pin: svg(<path d="M12 17v5M9 10.76V6a3 3 0 0 1 6 0v4.76l2.5 3.24h-11z" />),
-    collapse: svg(<path d="M9 18l6-6-6-6" />),
+    minimize: svg(<path d="M5 12h14" />),
+    external: svg(<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" />),
     chevron: svg(<path d="M9 18l6-6-6-6" />),
     search: svg(
         <>

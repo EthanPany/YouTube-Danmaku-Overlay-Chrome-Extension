@@ -53,7 +53,13 @@ export function DisplayTab({ settings, update }) {
             </Section>
             <Section title="Panel">
                 <ToggleRow
-                    label="Tuck into side tab when idle"
+                    label="Clickable timestamps"
+                    hint="Underline times like 空降 5:30 in danmaku; click to jump"
+                    checked={settings.clickableTimestamps}
+                    onChange={(v) => update({ clickableTimestamps: v })}
+                />
+                <ToggleRow
+                    label="Shrink to corner button when idle"
                     checked={settings.autoCollapsePanel}
                     onChange={(v) => update({ autoCollapsePanel: v })}
                 />

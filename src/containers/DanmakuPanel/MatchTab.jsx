@@ -1,9 +1,30 @@
 /**
- * Match tab: the current Bilibili match, alternative candidates, and a
- * manual search box (free text or a pasted BV id / link).
+ * Match UI. `MatchSummary` is the always-visible part of the panel (the
+ * matched video, or the search status); `MatchTab` holds the details behind
+ * "More": score, parts, other candidates and a manual search box (free text
+ * or a pasted BV id / link).
  */
 import React, { useState, useEffect } from 'react';
 import { formatClock, formatCount, formatDate, scoreClass, https, Icons } from './controls';
+
+const videoUrl = (bvid, page = 1) => `https://www.bilibili.com/video/${bvid}${page > 1 ? `?p=${page}` : ''}`;
+
+/** Thumbnail cropped to the height of the text next to it; hovering shows that a click opens Bilibili. */
+function Thumb({ src, href, className = '' }) {
+    return (
+        <a
+            className={`thumb ${className}`}
+            href={href}
+            target="_blank"
+            rel="noreferrer"
+            title="Open on Bilibili"
+            onClick={(e) => e.stopPropagation()}
+        >
+            <img src={https(src)} referrerPolicy="no-referrer" alt="" loading="lazy" />
+            <span className="thumb-overlay">{Icons.external}</span>
+        </a>
+    );
+}
 
 function ScorePill({ score, breakdown }) {
     if (score === undefined) return null;
@@ -22,8 +43,8 @@ function ScorePill({ score, breakdown }) {
 function CandidateRow({ c, current, ytDuration, onPick }) {
     const diff = ytDuration && c.duration ? Math.round(c.duration - ytDuration) : null;
     return (
-        <button className={`item ${current ? 'current' : ''}`} onClick={() => onPick(c)} title={c.title}>
-            <img src={https(c.pic)} referrerPolicy="no-referrer" alt="" loading="lazy" />
+        <div className={`item ${current ? 'current' : ''}`} role="button" tabIndex={0} onClick={() => onPick(c)} title={`Use: ${c.title}`}>
+            <Thumb src={c.pic} href={videoUrl(c.bvid)} />
             <div className="grow">
                 <div className="t clamp2">{c.title}</div>
                 <div className="s">
@@ -38,19 +59,19 @@ function CandidateRow({ c, current, ytDuration, onPick }) {
                     )}
                 </div>
             </div>
-        </button>
+        </div>
     );
 }
 
-function MatchCard({ match, yt, danmaku, onSelectPage }) {
-    const { view, page } = match;
-    const url = `https://www.bilibili.com/video/${view.bvid}${page.page > 1 ? `?p=${page.page}` : ''}`;
-    return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+/** The always-visible part: the matched video card, or what the search is doing. */
+export function MatchSummary({ state }) {
+    const { status, message, match } = state;
+    if (match) {
+        const { view, page } = match;
+        const url = videoUrl(view.bvid, page.page);
+        return (
             <div className="card">
-                <a href={url} target="_blank" rel="noreferrer">
-                    <img className="thumb" src={https(view.pic)} referrerPolicy="no-referrer" alt="" />
-                </a>
+                <Thumb src={view.pic} href={url} className="big" />
                 <div className="meta">
                     <a className="t clamp2" href={url} target="_blank" rel="noreferrer" title={view.title}>
                         {view.title}
@@ -66,81 +87,80 @@ function MatchCard({ match, yt, danmaku, onSelectPage }) {
                     </div>
                 </div>
             </div>
-            <div className="row" style={{ flexWrap: 'wrap' }}>
-                <ScorePill score={match.score} breakdown={match.breakdown} />
-                {match.manual && <span className="pill">picked by you</span>}
-                <span className="hint">
-                    YouTube {formatClock(yt?.duration)} · Bilibili {formatClock(page.duration)}
-                </span>
+        );
+    }
+    if (status === 'loading' || status === 'searching') {
+        return (
+            <div className="status">
+                <div className="spinner" />
+                {message}
             </div>
-            {view.pages.length > 1 && (
-                <select value={page.cid} onChange={(e) => onSelectPage(Number(e.target.value))}>
-                    {view.pages.map((p) => (
-                        <option key={p.cid} value={p.cid}>
-                            P{p.page} {p.part} ({formatClock(p.duration)})
-                        </option>
-                    ))}
-                </select>
-            )}
-            <div className="hint">
-                {danmaku.loading
-                    ? 'Loading danmaku…'
-                    : `${formatCount(danmaku.shown)} of ${formatCount(danmaku.total)} comments shown${danmaku.source === 'xml' ? ' (log in to bilibili.com for more)' : ''}`}
-            </div>
-        </div>
-    );
+        );
+    }
+    if (status === 'no-match' || status === 'error') return <div className={status === 'error' ? 'error' : 'status'}>{message}</div>;
+    return null;
 }
 
 export default function MatchTab({ state, controller }) {
-    const { status, message, match, yt, candidates, candidatesLoaded, candidatesLoading, search, danmaku } = state;
-    const [showOthers, setShowOthers] = useState(status === 'no-match');
+    const { status, match, yt, candidates, candidatesLoaded, candidatesLoading, search, danmaku } = state;
     const [query, setQuery] = useState('');
 
+    // Candidates usually arrive with the automatic match; fetch them if not.
+    const needCandidates = !candidatesLoaded && !candidatesLoading && status !== 'loading';
     useEffect(() => {
-        if (status === 'no-match') setShowOthers(true);
-    }, [status]);
-
-    const toggleOthers = () => {
-        const next = !showOthers;
-        setShowOthers(next);
-        if (next) controller.loadCandidates();
-    };
+        if (needCandidates) controller.loadCandidates();
+    }, [needCandidates, controller]);
 
     const currentBvid = match?.view.bvid;
     const others = candidates.filter((c) => c.bvid !== currentBvid);
 
     return (
         <>
-            {(status === 'loading' || status === 'searching') && (
-                <div className="status">
-                    <div className="spinner" />
-                    {message}
+            {match && (
+                <div className="details">
+                    <div className="row" style={{ flexWrap: 'wrap' }}>
+                        <ScorePill score={match.score} breakdown={match.breakdown} />
+                        {match.manual && <span className="pill">picked by you</span>}
+                        <span className="hint">
+                            YouTube {formatClock(yt?.duration)} · Bilibili {formatClock(match.page.duration)}
+                        </span>
+                    </div>
+                    {match.view.pages.length > 1 && (
+                        <select value={match.page.cid} onChange={(e) => controller.selectPage(Number(e.target.value))}>
+                            {match.view.pages.map((p) => (
+                                <option key={p.cid} value={p.cid}>
+                                    P{p.page} {p.part} ({formatClock(p.duration)})
+                                </option>
+                            ))}
+                        </select>
+                    )}
+                    <div className="hint">
+                        {danmaku.loading
+                            ? 'Loading danmaku…'
+                            : `${formatCount(danmaku.shown)} of ${formatCount(danmaku.total)} comments shown${
+                                  danmaku.source === 'xml' ? ' (log in to bilibili.com for more)' : ''
+                              }`}
+                    </div>
                 </div>
             )}
-            {(status === 'no-match' || status === 'error') && <div className={status === 'error' ? 'error' : 'status'}>{message}</div>}
-
-            {match && <MatchCard match={match} yt={yt} danmaku={danmaku} onSelectPage={(cid) => controller.selectPage(cid)} />}
 
             {status !== 'loading' && (
                 <div>
-                    <button className={`disclosure ${showOthers ? 'open' : ''}`} onClick={toggleOthers}>
-                        {Icons.chevron}
-                        {match ? 'Not the right video? Other matches' : 'Possible matches'}
+                    <div className="section-title">
+                        {match ? 'Other matches' : 'Possible matches'}
                         {candidatesLoaded && ` (${others.length})`}
-                    </button>
-                    {showOthers && (
-                        <div className="list">
-                            {candidatesLoading && (
-                                <div className="status">
-                                    <div className="spinner" /> Searching…
-                                </div>
-                            )}
-                            {candidatesLoaded && others.length === 0 && <div className="hint">No other candidates. Try a search.</div>}
-                            {others.slice(0, 6).map((c) => (
-                                <CandidateRow key={c.bvid} c={c} ytDuration={yt?.duration} onPick={(x) => controller.selectCandidate(x)} />
-                            ))}
-                        </div>
-                    )}
+                    </div>
+                    <div className="list">
+                        {candidatesLoading && (
+                            <div className="status">
+                                <div className="spinner" /> Searching…
+                            </div>
+                        )}
+                        {candidatesLoaded && others.length === 0 && <div className="hint">No other candidates. Try a search.</div>}
+                        {others.slice(0, 6).map((c) => (
+                            <CandidateRow key={c.bvid} c={c} ytDuration={yt?.duration} onPick={(x) => controller.selectCandidate(x)} />
+                        ))}
+                    </div>
                 </div>
             )}
 

@@ -21,7 +21,7 @@ import { DanmakuRenderer, toLibraryComments } from './modules/renderer';
 /** Settings that the renderer can apply without rebuilding comments. */
 const LIVE_KEYS = new Set(['opacity', 'area', 'scrollSeconds']);
 /** Settings that don't affect the overlay at all. */
-const UI_KEYS = new Set(['autoCollapsePanel', 'panelTop', 'enabled', 'jevEnabled', 'jevApiKey']);
+const UI_KEYS = new Set(['autoCollapsePanel', 'panelRight', 'panelBottom', 'enabled', 'jevEnabled', 'jevApiKey']);
 const REBUILD_DEBOUNCE_MS = 150;
 
 const initialState = () => ({
@@ -234,7 +234,7 @@ export class Controller {
             this.renderer = new DanmakuRenderer(player, video);
         }
         const timeMap = createTimeMap({ ...alignment, offset });
-        this.renderer.setComments(toLibraryComments(comments, timeMap, settings), settings);
+        this.renderer.setComments(toLibraryComments(comments, timeMap, settings, this.state.match.page.duration), settings);
     }
 
     scheduleRebuild() {

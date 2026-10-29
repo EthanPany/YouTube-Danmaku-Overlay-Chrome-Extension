@@ -1,6 +1,6 @@
 import { normalize, textSimilarity, stripNoise, tokenize } from '../src/pages/Content/modules/text';
 import { buildQueries, corePart } from '../src/pages/Content/modules/queries';
-import { rankCandidates, isConfident, durationScore, mergeResults } from '../src/pages/Content/modules/match';
+import { rankCandidates, isConfident, durationScore, mergeResults, preferMoreDanmaku } from '../src/pages/Content/modules/match';
 
 describe('text normalization', () => {
     it('simplifies traditional Chinese and strips noise tags', () => {
@@ -175,5 +175,29 @@ describe('searchForYouTube', () => {
         expect(uploader.mid).toBe(42);
         expect(ranked[0].bvid).toBe('BVown');
         expect(isConfident(ranked[0])).toBe(true);
+    });
+});
+
+describe('danmaku count among equal matches', () => {
+    const c = (bvid, score, danmaku, breakdown = {}) => ({
+        bvid,
+        score,
+        danmaku,
+        breakdown: { title: 1, duration: 1, author: 0, linked: false, ...breakdown },
+    });
+
+    it('puts the copy with more danmaku first when both are the same video', () => {
+        const ranked = [c('A', 1.1, 0), c('B', 0.95, 20), c('C', 0.7, 999)];
+        expect(preferMoreDanmaku(ranked).map((x) => x.bvid)).toEqual(['B', 'A', 'C']);
+    });
+
+    it('keeps score order when the length differs enough to break sync', () => {
+        const ranked = [c('A', 1.0, 0), c('B', 0.98, 500, { duration: 0.96 })];
+        expect(preferMoreDanmaku(ranked).map((x) => x.bvid)).toEqual(['A', 'B']);
+    });
+
+    it('never promotes a candidate whose title does not match', () => {
+        const ranked = [c('A', 1.0, 0), c('B', 0.97, 500, { title: 0.2 })];
+        expect(preferMoreDanmaku(ranked).map((x) => x.bvid)).toEqual(['A', 'B']);
     });
 });

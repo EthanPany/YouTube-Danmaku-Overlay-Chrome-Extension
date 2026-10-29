@@ -33,8 +33,10 @@ export const AUTO_MATCH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const DEFAULT_SETTINGS = {
     // --- general ---
     enabled: true, // show danmaku automatically once a match is found
-    autoCollapsePanel: true, // tuck the panel into a side tab when idle
-    panelTop: 35, // vertical position of the side tab, % of viewport height
+    autoCollapsePanel: true, // shrink the panel to its corner button when idle (never after the user has hovered it)
+    panelRight: 24, // panel corner position: px from the viewport's right edge
+    panelBottom: 24, // ... and from its bottom edge
+    clickableTimestamps: true, // underline timestamps in danmaku ("空降 5:30") and jump on click
 
     // --- display ---
     fontSize: 24, // px for a "normal" (size 25) Bilibili comment

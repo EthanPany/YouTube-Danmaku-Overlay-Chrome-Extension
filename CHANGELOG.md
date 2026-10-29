@@ -9,11 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Multi-query Bilibili search with ranked candidates, confidence-gated auto-selection, manual search and BV/link paste
-- Side panel with Match / Display / Filter / Sync tabs that collapses into a draggable edge tab
+- Compact panel in the bottom-right corner (draggable, shrinks to a round button); details and Match / Display / Filter / Sync tabs behind "More"
+- Clickable timestamps in danmaku ("空降 5:30"): underlined, click to jump
+- Equal matches prefer the copy with more danmaku
 - Danmaku colors, sizes and top/bottom modes; smart-block level, keyword/regex blocking, duplicate merging, per-second cap
 - Sponsor-aware timeline alignment (SponsorBlock, BilibiliSponsorBlock, 空降/ad-talk detection) and per-video offset
 - Protobuf danmaku segments merged with the XML pool
-- Optional Jev (TypeSafe) re-ranking, off by default
+- Optional Jev (TypeSafe) mode, off by default: confirms or blocks auto-select
 - Matching eval set and harness (`eval/`), unit tests
 
 ### Changed

@@ -1,17 +1,23 @@
 /**
- * The in-page panel. Collapsed, it is a small tab docked to the right edge
- * (draggable vertically) showing a status dot; expanded, it shows the
- * Match / Display / Filter / Sync tabs. It tucks itself away when idle
- * unless pinned or `autoCollapsePanel` is off.
+ * The in-page panel, docked to the bottom-right corner and draggable
+ * anywhere. Collapsed, it is a small round button with a status dot.
+ * Expanded, it shows only the matched video; "More" reveals the
+ * Match / Display / Filter / Sync tabs.
+ *
+ * It shrinks back to the button when idle (setting `autoCollapsePanel`),
+ * but never once the user has hovered it, and never on mouse-out: after
+ * that only the collapse button closes it.
  */
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import MatchTab from './MatchTab';
+import MatchTab, { MatchSummary } from './MatchTab';
 import { DisplayTab, FilterTab, SyncTab } from './SettingsTabs';
 import { Switch, Icons } from './controls';
 
 const IDLE_COLLAPSE_MS = 5000;
 const NO_MATCH_COLLAPSE_MS = 12000;
 const TABS = ['Match', 'Display', 'Filter', 'Sync'];
+const FAB_SIZE = 40;
+const DRAG_THRESHOLD = 4;
 
 function useControllerState(controller) {
     const [state, setState] = useState(controller.state);
@@ -27,29 +33,38 @@ function statusDot(state, enabled) {
     return '';
 }
 
-/** Vertical drag on the side tab; a click without movement expands. */
-function useTabDrag(top, onMove, onClick) {
+/** Keeps the corner position on screen. */
+function clampPos({ right, bottom }) {
+    const max = (n, limit) => Math.max(0, Math.min(limit, Math.round(n)));
+    return { right: max(right, window.innerWidth - FAB_SIZE), bottom: max(bottom, window.innerHeight - FAB_SIZE) };
+}
+
+/**
+ * Drag by the given handle; the position is the panel's bottom-right corner
+ * measured from the viewport's bottom-right. A press without movement is a click.
+ */
+function useCornerDrag(pos, onMove, onClick) {
     return useCallback(
         (e) => {
-            const startY = e.clientY;
-            const startTop = top;
+            if (e.button !== 0 || e.target.closest('button, input, select, .switch, a')) return;
+            const start = { x: e.clientX, y: e.clientY };
             let moved = false;
+            const at = (ev) => clampPos({ right: pos.right - (ev.clientX - start.x), bottom: pos.bottom - (ev.clientY - start.y) });
             const move = (ev) => {
-                const dy = ev.clientY - startY;
-                if (Math.abs(dy) > 4) moved = true;
-                if (moved) onMove(Math.max(5, Math.min(90, startTop + (dy / window.innerHeight) * 100)), false);
+                if (!moved && Math.hypot(ev.clientX - start.x, ev.clientY - start.y) > DRAG_THRESHOLD) moved = true;
+                if (moved) onMove(at(ev), false);
             };
             const up = (ev) => {
                 window.removeEventListener('mousemove', move);
                 window.removeEventListener('mouseup', up);
-                if (moved) onMove(Math.max(5, Math.min(90, startTop + ((ev.clientY - startY) / window.innerHeight) * 100)), true);
-                else onClick();
+                if (moved) onMove(at(ev), true);
+                else onClick?.();
             };
             window.addEventListener('mousemove', move);
             window.addEventListener('mouseup', up);
             e.preventDefault();
         },
-        [top, onMove, onClick]
+        [pos, onMove, onClick]
     );
 }
 
@@ -59,52 +74,65 @@ export default function Panel({ controller }) {
     const enabled = state.videoEnabled ?? settings?.enabled ?? true;
 
     const [expanded, setExpanded] = useState(true);
-    const [pinned, setPinned] = useState(false);
+    const [more, setMore] = useState(false);
     const [tab, setTab] = useState('Match');
-    const [dragTop, setDragTop] = useState(null);
-    const hovering = useRef(false);
+    const [dragPos, setDragPos] = useState(null);
+    const touched = useRef(false); // hovered since this video opened: no more auto-collapse
     const timer = useRef(null);
 
-    // Re-open on each new video so the user sees what was matched.
+    // Re-open (compact) on each new video so the user sees what was matched.
     useEffect(() => {
         setExpanded(true);
+        setMore(false);
         setTab('Match');
+        touched.current = false;
     }, [videoId]);
 
-    const scheduleCollapse = useCallback(() => {
-        clearTimeout(timer.current);
-        if (!settings?.autoCollapsePanel || pinned || hovering.current) return;
-        if (status === 'loading' || status === 'searching') return;
-        timer.current = setTimeout(() => setExpanded(false), status === 'no-match' ? NO_MATCH_COLLAPSE_MS : IDLE_COLLAPSE_MS);
-    }, [settings?.autoCollapsePanel, pinned, status]);
+    // Nothing was found: show the candidates and search box right away.
+    useEffect(() => {
+        if (status === 'no-match') {
+            setMore(true);
+            setTab('Match');
+        }
+    }, [status]);
 
     useEffect(() => {
-        if (expanded) scheduleCollapse();
+        clearTimeout(timer.current);
+        if (!expanded || !settings?.autoCollapsePanel || touched.current) return undefined;
+        if (status === 'loading' || status === 'searching') return undefined;
+        timer.current = setTimeout(() => setExpanded(false), status === 'no-match' ? NO_MATCH_COLLAPSE_MS : IDLE_COLLAPSE_MS);
         return () => clearTimeout(timer.current);
-    }, [expanded, scheduleCollapse]);
+    }, [expanded, settings?.autoCollapsePanel, status]);
 
-    const onTabMove = useCallback(
-        (top, commit) => {
-            setDragTop(commit ? null : top);
-            if (commit) controller.updateSettings({ panelTop: Math.round(top) });
+    const onMove = useCallback(
+        (pos, commit) => {
+            setDragPos(commit ? null : pos);
+            if (commit) controller.updateSettings({ panelRight: pos.right, panelBottom: pos.bottom });
         },
         [controller]
     );
-    const top = dragTop ?? settings?.panelTop ?? 35;
-    const onTabMouseDown = useTabDrag(top, onTabMove, () => setExpanded(true));
+    const pos = dragPos ?? clampPos({ right: settings?.panelRight ?? 24, bottom: settings?.panelBottom ?? 24 });
+    const expand = useCallback(() => {
+        touched.current = true;
+        setExpanded(true);
+    }, []);
+    const onFabDown = useCornerDrag(pos, onMove, expand);
+    const onHeaderDown = useCornerDrag(pos, onMove, null);
 
     if (!settings || !videoId) return null;
+
+    const dot = <span className={`dot ${statusDot(state, enabled)}`} />;
 
     if (!expanded) {
         return (
             <div
-                className="tab"
-                style={{ top: `${top}%` }}
-                onMouseDown={onTabMouseDown}
+                className="fab"
+                style={{ right: pos.right, bottom: pos.bottom }}
+                onMouseDown={onFabDown}
                 title={match ? `B站弹幕: ${match.view.title}` : 'B站弹幕 — click to open, drag to move'}
             >
                 <span className="logo">弹</span>
-                <span className={`dot ${statusDot(state, enabled)}`} />
+                {dot}
             </div>
         );
     }
@@ -112,44 +140,42 @@ export default function Panel({ controller }) {
     return (
         <div
             className="panel"
-            style={{ top: `clamp(8px, calc(${top}% - 60px), calc(100vh - 420px))` }}
+            style={{ right: pos.right, bottom: pos.bottom, maxHeight: `min(640px, calc(100vh - ${pos.bottom + 16}px))` }}
             onMouseEnter={() => {
-                hovering.current = true;
+                touched.current = true;
                 clearTimeout(timer.current);
             }}
-            onMouseLeave={() => {
-                hovering.current = false;
-                scheduleCollapse();
-            }}
         >
-            <div className="header">
+            <div className="header" onMouseDown={onHeaderDown} title="Drag to move">
                 <span className="logo">弹</span>
-                <div className="title">
-                    B站弹幕
-                    <span className="sub">
-                        {status === 'matched' ? (enabled ? 'On' : 'Off') : status === 'no-match' ? 'No match' : status === 'error' ? 'Error' : '…'}
-                    </span>
-                </div>
+                {dot}
+                <span className="grow" />
                 <Switch checked={enabled} onChange={(v) => controller.setVideoEnabled(v)} title="Show danmaku on this video" />
-                <button className={`icon-btn ${pinned ? 'on' : ''}`} title={pinned ? 'Unpin' : 'Keep open'} onClick={() => setPinned(!pinned)}>
-                    {Icons.pin}
+                <button className="icon-btn" title="Minimize" onClick={() => setExpanded(false)}>
+                    {Icons.minimize}
                 </button>
-                <button className="icon-btn" title="Tuck away" onClick={() => setExpanded(false)}>
-                    {Icons.collapse}
-                </button>
-            </div>
-            <div className="tabs">
-                {TABS.map((t) => (
-                    <button key={t} className={t === tab ? 'active' : ''} onClick={() => setTab(t)}>
-                        {t}
-                    </button>
-                ))}
             </div>
             <div className="body">
-                {tab === 'Match' && <MatchTab state={state} controller={controller} />}
-                {tab === 'Display' && <DisplayTab settings={settings} update={(p) => controller.updateSettings(p)} />}
-                {tab === 'Filter' && <FilterTab settings={settings} danmaku={state.danmaku} update={(p) => controller.updateSettings(p)} />}
-                {tab === 'Sync' && <SyncTab state={state} controller={controller} />}
+                <MatchSummary state={state} />
+                <button className={`disclosure ${more ? 'open' : ''}`} onClick={() => setMore(!more)}>
+                    {Icons.chevron}
+                    {more ? 'Less' : 'More'}
+                </button>
+                {more && (
+                    <>
+                        <div className="tabs">
+                            {TABS.map((t) => (
+                                <button key={t} className={t === tab ? 'active' : ''} onClick={() => setTab(t)}>
+                                    {t}
+                                </button>
+                            ))}
+                        </div>
+                        {tab === 'Match' && <MatchTab state={state} controller={controller} />}
+                        {tab === 'Display' && <DisplayTab settings={settings} update={(p) => controller.updateSettings(p)} />}
+                        {tab === 'Filter' && <FilterTab settings={settings} danmaku={state.danmaku} update={(p) => controller.updateSettings(p)} />}
+                        {tab === 'Sync' && <SyncTab state={state} controller={controller} />}
+                    </>
+                )}
             </div>
         </div>
     );
