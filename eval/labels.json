@@ -204,7 +204,27 @@
     "mBmluBvZxnA",
     "8NiwrTuUl_0",
     "G6ooFCusAZA",
-    "ng1MQA3JkdU"
+    "ng1MQA3JkdU",
+    "rIZKjXbRDnQ",
+    "DN1Jj1rIiJQ",
+    "vwyU2jrc3W4",
+    "mQChdQuRMhU",
+    "cDuWvdJ-A_c",
+    "E9OCGNieqAU",
+    "de8xaYZZu8Y",
+    "NmDosvcb3fM",
+    "0m0TMwAY1fc",
+    "9aDmiIOBU34",
+    "eyZEqSPeMwg",
+    "NiCgcUTL9_Q",
+    "ONAuUyml0yI",
+    "JsBZOcqZerk",
+    "J1WoNuemKOg",
+    "eYBEJBfq_Zs",
+    "26P1KyvrmjI",
+    "h0EGCnBjTVk",
+    "S7UM5lSgAg8",
+    "Xg1ro-zG7AM"
   ],
   "3HQ8Aiwjqus": {
     "expected": [
@@ -293,5 +313,92 @@
   "scwlR0QHGOk": {
     "exclude": true,
     "note": "a 1365s 'Tesla Roadster Launch' recording of identical length exists; unverifiable"
+  },
+  "Y_rThz_v6e8": {
+    "expected": [
+      "BV1ezYx6EEqA"
+    ],
+    "note": "creator's second account 毕的二阶导, identical title+length"
+  },
+  "ZGBO6ROpW1A": {
+    "expected": [
+      "BV1ABWc6zEBk"
+    ],
+    "note": "星球研究所 official, same title, +7s"
+  },
+  "f1q1GBCcTm8": {
+    "expected": [
+      "BV1Vbnn6iEfG"
+    ],
+    "note": "小约翰可汗 official, Bilibili cut +106s"
+  },
+  "o_oYXndB1iU": {
+    "expected": [
+      "BV1WhaA6hE7s"
+    ],
+    "note": "小约翰可汗 official, Bilibili cut +92s"
+  },
+  "LTCUmPI_0Nw": {
+    "expected": [
+      "BV1y5gP61E6m"
+    ],
+    "note": "小约翰可汗 official, Bilibili cut +119s"
+  },
+  "2h1O6aWNfBc": {
+    "exclude": true,
+    "note": "星球研究所 retitles heavily; unverifiable"
+  },
+  "yr65jVpDmIg": {
+    "exclude": true,
+    "note": "星球研究所 retitles heavily; unverifiable"
+  },
+  "VxCQkV9fLWY": {
+    "exclude": true,
+    "note": "星球研究所 retitles heavily; unverifiable"
+  },
+  "0-JLNJplSM8": {
+    "exclude": true,
+    "note": "星球研究所 retitles heavily; unverifiable"
+  },
+  "ISv2YREII-8": {
+    "exclude": true,
+    "note": "auto label was a different video; true upload unverified"
+  },
+  "1LysZPsmCA4": {
+    "exclude": true,
+    "note": "not found; unverifiable"
+  },
+  "n6hPB3Arr_M": {
+    "expected": [
+      "BV1FoeN6uEvK"
+    ],
+    "note": "MrWhoseTheBoss科技, identical title+length (missed by negative check)"
+  },
+  "PjAyUhf52D0": {
+    "expected": [
+      "BV1vCei6EEu2"
+    ],
+    "note": "MrWhoseTheBoss科技, identical title+length (missed by negative check)"
+  },
+  "_L1Rim7-IPo": {
+    "expected": [
+      "BV1Qvh86UEaz",
+      "BV1QThS6zEgS"
+    ],
+    "note": "translated reuploads, +93s cut (missed by negative check)"
+  },
+  "Xrxy_W78SKk": {
+    "expected": [
+      "BV1ncxV6gEac",
+      "BV1r3nr6BEqi",
+      "BV164nB6fEfu"
+    ],
+    "note": "identical-title reuploads + machine-translated reupload with identical length"
+  },
+  "nQdXp6HKKik": {
+    "expected": [
+      "BV1Sqpg6TEkH"
+    ],
+    "note": "Mrwhosetheboss中文 translated upload, identical length, same day (missed by negative check)"
   }
 }

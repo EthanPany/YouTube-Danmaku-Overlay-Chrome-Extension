@@ -8,7 +8,7 @@
     "bilibili": {
       "mid": 25876945,
       "name": "极客湾Geekerwan",
-      "fans": 5645394
+      "fans": 5645947
     }
   },
   {
@@ -20,7 +20,7 @@
     "bilibili": {
       "mid": 25910292,
       "name": "钟文泽",
-      "fans": 2430739
+      "fans": 2430619
     }
   },
   {
@@ -32,7 +32,7 @@
     "bilibili": {
       "mid": 286187082,
       "name": "大耳朵TV",
-      "fans": 1134125
+      "fans": 1134145
     }
   },
   {
@@ -52,7 +52,7 @@
     "bilibili": {
       "mid": 382666849,
       "name": "笔记本维修厮",
-      "fans": 1164117
+      "fans": 1164119
     }
   },
   {
@@ -64,7 +64,7 @@
     "bilibili": {
       "mid": 3816626,
       "name": "Linksphotograph",
-      "fans": 4889897
+      "fans": 4889874
     }
   },
   {
@@ -76,7 +76,7 @@
     "bilibili": {
       "mid": 510941798,
       "name": "老肉杂谈",
-      "fans": 423023
+      "fans": 423031
     }
   },
   {
@@ -88,7 +88,7 @@
     "bilibili": {
       "mid": 11336264,
       "name": "TESTV官方频道",
-      "fans": 2593502
+      "fans": 2593500
     }
   },
   {
@@ -112,7 +112,7 @@
     "bilibili": {
       "mid": 367877,
       "name": "笔吧评测室",
-      "fans": 2812509
+      "fans": 2812537
     }
   },
   {
@@ -144,7 +144,7 @@
     "bilibili": {
       "mid": 87670515,
       "name": "神秘园",
-      "fans": 2894666
+      "fans": 2894830
     }
   },
   {
@@ -156,7 +156,7 @@
     "bilibili": {
       "mid": 946974,
       "name": "影视飓风",
-      "fans": 18840639
+      "fans": 18840800
     }
   },
   {
@@ -168,7 +168,7 @@
     "bilibili": {
       "mid": 163637592,
       "name": "老师好我叫何同学",
-      "fans": 13058139
+      "fans": 13058240
     }
   },
   {
@@ -180,7 +180,7 @@
     "bilibili": {
       "mid": 520819684,
       "name": "小Lin说",
-      "fans": 7580402
+      "fans": 7580463
     }
   },
   {
@@ -192,7 +192,7 @@
     "bilibili": {
       "mid": 1532165,
       "name": "papi酱",
-      "fans": 9497165
+      "fans": 9497194
     }
   },
   {
@@ -204,7 +204,7 @@
     "bilibili": {
       "mid": 37663924,
       "name": "硬核的半佛仙人",
-      "fans": 7714163
+      "fans": 7714171
     }
   },
   {
@@ -216,7 +216,7 @@
     "bilibili": {
       "mid": 19319172,
       "name": "差评君",
-      "fans": 3385523
+      "fans": 3385529
     }
   },
   {
@@ -228,7 +228,7 @@
     "bilibili": {
       "mid": 9458053,
       "name": "李永乐老师官方",
-      "fans": 3488609
+      "fans": 3488602
     }
   },
   {
@@ -252,7 +252,7 @@
     "bilibili": {
       "mid": 3766866,
       "name": "科技美学",
-      "fans": 4471668
+      "fans": 4471664
     }
   },
   {
@@ -264,7 +264,7 @@
     "bilibili": {
       "mid": 39627524,
       "name": "食贫道",
-      "fans": 9734154
+      "fans": 9734179
     }
   },
   {
@@ -276,7 +276,7 @@
     "bilibili": {
       "mid": 472747194,
       "name": "巫师财经",
-      "fans": 4413525
+      "fans": 4413528
     }
   },
   {
@@ -288,7 +288,7 @@
     "bilibili": {
       "mid": 88461692,
       "name": "3Blue1Brown",
-      "fans": 2777702
+      "fans": 2777728
     }
   },
   {
@@ -316,7 +316,115 @@
     "bilibili": {
       "mid": 7458285,
       "name": "爱否科技FView",
-      "fans": 1163406
+      "fans": 1163405
     }
+  },
+  {
+    "id": "bidao",
+    "youtube": {
+      "channelId": "UCKJvfb-6icHloy6MBpHg9aw",
+      "title": "毕导THU"
+    },
+    "bilibili": {
+      "mid": 254463269,
+      "name": "毕导",
+      "fans": 8428879
+    }
+  },
+  {
+    "id": "xingqiu",
+    "youtube": {
+      "channelId": "UCvtdw-YVb9TDHq834W2DI8Q",
+      "title": "Institute for Planets"
+    },
+    "bilibili": {
+      "mid": 326427334,
+      "name": "星球研究所",
+      "fans": 5793077
+    }
+  },
+  {
+    "id": "xiaoyuehan",
+    "youtube": {
+      "channelId": "UCAeIZxbLS06qOpBTAGT1qxA",
+      "title": "小约翰可汗"
+    },
+    "bilibili": {
+      "mid": 23947287,
+      "name": "小约翰可汗",
+      "fans": 10948129
+    }
+  },
+  {
+    "id": "manshi",
+    "youtube": {
+      "channelId": "UC9D-nVmcQdCgAGUPBJZcmOA",
+      "title": "Meditation Math"
+    },
+    "bilibili": {
+      "mid": 266765166,
+      "name": "漫士沉思录",
+      "fans": 1519889
+    }
+  },
+  {
+    "id": "laoshi",
+    "youtube": {
+      "channelId": "UC5mVFJf71Ax6TJZcbmTnilw",
+      "title": "老石谈芯"
+    },
+    "bilibili": {
+      "mid": 612932327,
+      "name": "老石谈芯",
+      "fans": 568385
+    }
+  },
+  {
+    "id": "linchao",
+    "youtube": {
+      "channelId": "UCDAMXqexiNMSzN_Vcwj72AQ",
+      "title": "所长林超"
+    },
+    "bilibili": {
+      "mid": 520155988,
+      "name": "所长林超",
+      "fans": 3620299
+    }
+  },
+  {
+    "id": "liziran",
+    "youtube": {
+      "channelId": "UCgLUl1WDoDXUtxPaZeSZHsw",
+      "title": "李自然说"
+    },
+    "bilibili": {
+      "mid": 39089748,
+      "name": "李自然说",
+      "fans": 240522
+    }
+  },
+  {
+    "id": "veritasium",
+    "youtube": {
+      "channelId": "UCHnyfMqiRRG1u-2MsSQLbXA",
+      "title": "Veritasium"
+    },
+    "bilibili": null
+  },
+  {
+    "id": "mrwhose",
+    "youtube": {
+      "channelId": "UCMiJRAwDNSNzuYeN2uWa0pA",
+      "title": "Mrwhosetheboss"
+    },
+    "bilibili": null
+  },
+  {
+    "id": "markrober",
+    "youtube": {
+      "channelId": "UCY1kMZp36IQSyNx_9h4mpCg",
+      "title": "Mark Rober"
+    },
+    "bilibili": null
   }
 ]

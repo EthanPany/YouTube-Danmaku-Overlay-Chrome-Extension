@@ -9,7 +9,7 @@ import { bili, readJson, EVAL_DIR } from './lib/net.mjs';
 
 const data = readJson(path.join(EVAL_DIR, 'dataset.json'));
 const strip = (t) => t.replace(/<[^>]+>/g, '');
-for (const item of data.items.filter((i) => !i.expected.length)) {
+for (const item of data.items.filter((i) => !i.expected.length && (!process.env.SPLIT || i.split === process.env.SPLIT))) {
     const yt = item.youtube;
     const hits = new Map();
     for (const title of yt.titles) {

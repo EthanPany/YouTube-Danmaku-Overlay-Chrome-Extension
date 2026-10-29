@@ -34,13 +34,15 @@ Three bundles (see `webpack.config.js`): content script, service worker, toolbar
 **Content script** (`src/pages/Content/`) runs on all `www.youtube.com` pages (YouTube is an SPA). `index.js` detects navigation via `yt-navigate-finish` + URL poll (never a body-wide MutationObserver). `controller.js` is the per-video state machine and single source of truth for the UI; async steps check `this.generation` to drop stale results. Pipeline:
 
 1. `modules/youtube.js` — metadata from InnerTube `/youtubei/v1/player` in zh-CN and en (original + localized titles, real duration). The DOM `<h1>` is a last resort: it can be YouTube's machine translation or stale after navigation.
-2. `modules/queries.js` → `modules/bilibili.js#searchForYouTube` — several query variants searched in parallel plus a search for the YouTube id (kept only if the result links it).
+2. `modules/queries.js` → `modules/bilibili.js#searchForYouTube` — query variants in parallel, the main query again with Bilibili's duration-bucket filter, and the YouTube id (kept only if a result links it). Unless the creator's own upload already won on title, it then finds the creator's Bilibili account(s) through the uploader search (active accounts first) and adds their recent uploads. This catches retitled uploads.
 3. `modules/match.js` — scoring (title similarity over all title variants via `text.js`, duration, uploader, explicit links) and `isConfident` gating auto-selection. Optional Jev re-rank (`src/shared/jev.js`, off by default, needs a TypeSafe key).
 4. `modules/alignment.js` — maps Bilibili time → YouTube time around sponsor sections (SponsorBlock/BilibiliSponsorBlock segments fitted to the duration difference, else "空降"/ad-talk danmaku detection) plus per-video manual offset.
 5. `modules/danmakuFilter.js` — modes, smart-block weight, keyword/regex block, duplicate merge, per-second cap.
 6. `modules/renderer.js` — wraps the `danmaku` canvas library inside `#movie_player`; the library itself follows the `<video>` events.
 
-**Panel UI** (`src/containers/DanmakuPanel/`) renders in a shadow root (`mount.jsx`), which also stops key events from inputs reaching YouTube's shortcuts. CSS lives in `styles.js` as a string.
+**Panel UI** (`src/containers/DanmakuPanel/`) renders in a shadow root (`mount.jsx`), which also stops key events from inputs reaching YouTube's shortcuts. CSS lives in `styles.js` as a string. The host element `#ydo-panel-host` mirrors controller state in `data-status`, `data-message`, `data-match` and `data-danmaku`, for end-to-end checks.
+
+Headless-Chrome testing caveat: Bilibili returns empty search results to a `HeadlessChrome` user agent, so pass a normal `--user-agent`.
 
 **State**: `chrome.storage.local` holds settings (`STORAGE_KEYS.SETTINGS`, merged over `DEFAULT_SETTINGS`) and per-video records (`video:<id>` → matched bvid/cid, manual flag, offset, on/off). Automatic matches expire after 7 days; manual ones don't.
 

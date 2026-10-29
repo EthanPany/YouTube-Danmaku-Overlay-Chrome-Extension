@@ -7,7 +7,7 @@ import { buildQueries, channelName } from './queries';
 import { rankCandidates, mergeResults, isConfident, nameSimilarity } from './match';
 import { normalize } from './text';
 
-function send(type, payload) {
+function sendOnce(type, payload) {
     return new Promise((resolve, reject) => {
         try {
             chrome.runtime.sendMessage({ type, ...payload }, (response) => {
@@ -23,6 +23,20 @@ function send(type, payload) {
     });
 }
 
+/** The MV3 service worker can be mid-restart; retry delivery failures briefly. */
+const DELIVERY_ERROR = /Receiving end does not exist|message port closed|No response from background/;
+
+async function send(type, payload, attempts = 3) {
+    for (let i = 1; ; i++) {
+        try {
+            return await sendOnce(type, payload);
+        } catch (err) {
+            if (i >= attempts || !DELIVERY_ERROR.test(err.message)) throw err;
+            await new Promise((r) => setTimeout(r, 400 * i));
+        }
+    }
+}
+
 export const searchVideos = (keyword, filters) => send(MSG.SEARCH, { keyword, filters });
 export const searchUsers = (keyword) => send(MSG.SEARCH_USERS, { keyword });
 export const getUploaderVideos = (mid, name) => send(MSG.UPLOADER_VIDEOS, { mid, name });
@@ -35,6 +49,8 @@ export const jevRank = (body, apiKey) => send(MSG.JEV_RANK, { body, apiKey });
 export const defaultSearchApi = { search: searchVideos, searchUsers, uploaderVideos: getUploaderVideos };
 
 const UPLOADER_NAME_MATCH = 0.85;
+/** An account counts as active if it uploaded within this window of the YouTube date. */
+const ACTIVE_WINDOW_SECONDS = 60 * 86400;
 
 /** Bilibili's own duration buckets: <10, 10-30, 30-60, >60 minutes. */
 export function durationBucket(seconds) {
@@ -46,22 +62,37 @@ export function durationBucket(seconds) {
 }
 
 /**
- * Finds the YouTube creator's own Bilibili account: first among uploaders
- * already in the results, otherwise via Bilibili's uploader search.
+ * Finds the YouTube creator's Bilibili account(s): uploaders already in the
+ * results plus Bilibili's uploader search. A creator (or their fans) may
+ * have several accounts, some long dormant, so accounts that were uploading
+ * around the YouTube video's date come first, then name match, then
+ * followers. Also returns the uploader-search's "recent uploads" of every
+ * matching account, which are free candidates.
  */
-async function findUploader(yt, pool, api) {
+async function findUploaders(yt, pool, api, max = 2) {
     const channel = normalize(yt.channel || '');
-    if (!channel) return null;
-    let best = null;
-    const consider = (mid, name) => {
-        const s = nameSimilarity(channel, normalize(name || ''));
-        if (mid && s >= UPLOADER_NAME_MATCH && (!best || s > best.score)) best = { mid, name, score: s };
+    if (!channel) return { uploaders: [], recent: [] };
+    const ytTime = yt.publishDate ? Date.parse(yt.publishDate) / 1000 : Date.now() / 1000;
+    const found = new Map();
+    const consider = (mid, name, fans = 0, latest = 0) => {
+        const score = nameSimilarity(channel, normalize(name || ''));
+        if (!mid || score < UPLOADER_NAME_MATCH) return;
+        const prev = found.get(mid) || { latest: 0, fans: 0 };
+        found.set(mid, { mid, name, score, fans: Math.max(fans, prev.fans), latest: Math.max(latest, prev.latest) });
     };
-    for (const c of pool) consider(c.mid, c.author);
-    if (best) return best;
+    for (const c of pool) consider(c.mid, c.author, 0, c.pubdate);
     const users = await api.searchUsers(channelName(yt.channel)).catch(() => []);
-    for (const u of users.slice(0, 5)) consider(u.mid, u.name);
-    return best;
+    const recent = [];
+    for (const u of users.slice(0, 6)) {
+        const latest = Math.max(0, ...(u.recent || []).map((r) => r.pubdate || 0));
+        consider(u.mid, u.name, u.fans, latest);
+        if (found.has(u.mid)) recent.push(...(u.recent || []));
+    }
+    const active = (u) => (Math.abs(u.latest - ytTime) < ACTIVE_WINDOW_SECONDS || u.latest > ytTime ? 1 : 0);
+    const uploaders = [...found.values()]
+        .sort((a, b) => active(b) - active(a) || b.score - a.score || b.fans - a.fans)
+        .slice(0, max);
+    return { uploaders, recent };
 }
 
 /**
@@ -99,19 +130,18 @@ export async function searchForYouTube(yt, api = defaultSearchApi) {
 
     let pool = mergeResults(lists);
     let ranked = rankCandidates(yt, pool);
-    let uploader = null;
+    let uploaders = [];
     const best = ranked[0];
     // Skip the extra lookups only when the creator's own upload already won
     // on title; otherwise their channel may hold a better (or the only) copy.
     if (!(best && isConfident(ranked) && best.breakdown.title >= 0.6 && best.breakdown.author >= 0.9)) {
-        uploader = await findUploader(yt, pool, api);
-        if (uploader) {
-            const own = await api.uploaderVideos(uploader.mid, uploader.name).catch(() => []);
-            pool = mergeResults([pool, own]);
-            ranked = rankCandidates(yt, pool);
-        }
+        const found = await findUploaders(yt, pool, api);
+        uploaders = found.uploaders;
+        const own = await Promise.all(uploaders.map((u) => api.uploaderVideos(u.mid, u.name).catch(() => [])));
+        pool = mergeResults([pool, found.recent, ...own]);
+        ranked = rankCandidates(yt, pool);
     }
-    return { queries, ranked, uploader };
+    return { queries, ranked, uploader: uploaders[0] || null };
 }
 
 /** Ranks the results of a user-typed query against the current video. */

@@ -43,7 +43,7 @@ export function compactBili(key, value) {
             result: value.result.map((v) =>
                 v.type === 'video' || v.bvid
                     ? { ...pick(v, ['type', 'bvid', 'aid', 'title', 'author', 'mid', 'duration', 'pic', 'play', 'video_review', 'pubdate', 'tag']), description: String(v.description || '').slice(0, 300) }
-                    : pick(v, ['type', 'mid', 'uname', 'fans'])
+                    : { ...pick(v, ['type', 'mid', 'uname', 'fans']), res: (v.res || []).map((r) => pick(r, ['bvid', 'title', 'pubdate', 'duration', 'pic', 'play', 'dm'])) }
             ),
         };
     }

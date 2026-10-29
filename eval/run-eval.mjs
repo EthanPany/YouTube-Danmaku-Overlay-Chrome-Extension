@@ -23,7 +23,7 @@ import path from 'path';
 import { bili, cached, readJson, writeJson, EVAL_DIR, stats } from './lib/net.mjs';
 import { searchForYouTube } from '../src/pages/Content/modules/bilibili.js';
 import { isConfident } from '../src/pages/Content/modules/match.js';
-import { normalizeSearchItem, normalizeArchive } from '../src/pages/Background/modules/bilibiliApi.js';
+import { normalizeSearchItem, normalizeArchive, normalizeUser } from '../src/pages/Background/modules/bilibiliApi.js';
 import { buildJevRequest, applyJevResponse, callJev, JEV_TOP_K } from '../src/shared/jev.js';
 import { sify } from 'chinese-conv/dist';
 
@@ -44,7 +44,7 @@ const api = {
     },
     async searchUsers(keyword) {
         const data = await bili('/x/web-interface/wbi/search/type', { search_type: 'bili_user', keyword, page: 1 });
-        return (data.result || []).map((u) => ({ mid: u.mid, name: u.uname, fans: u.fans || 0 }));
+        return (data.result || []).map(normalizeUser);
     },
     async uploaderVideos(mid, name) {
         const data = await bili('/x/series/recArchivesByKeywords', { mid, keywords: '', ps: 50, pn: 1 }, { signed: false, referer: `https://space.bilibili.com/${mid}` });
@@ -138,7 +138,7 @@ async function main() {
     }
 
     const report = {};
-    for (const split of ['dev', 'test', 'all']) {
+    for (const split of ['dev', 'test', 'holdout', 'all']) {
         const subset = items.filter((i) => split === 'all' || i.split === split);
         if (!subset.length) continue;
         report[split] = { heuristic: score(subset, (i) => results.get(i.id).heuristic) };

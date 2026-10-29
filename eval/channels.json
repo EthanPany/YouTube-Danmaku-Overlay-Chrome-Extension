@@ -1,5 +1,5 @@
 {
-  "_doc": "Eval channel pairs. ytQuery resolves the YouTube channel; biliUser resolves the Bilibili uploader (official) or is null for channels only reuploaded by fans. split: dev = used for tuning, test = held out, only scored. Never read by src/.",
+  "_doc": "Eval channel pairs. ytQuery resolves the YouTube channel; biliUser resolves the Bilibili uploader (official) or is null for channels only reuploaded by fans. split: dev = used for tuning, test = held out (consulted once in round 4, see eval/README.md), holdout = fresh channels added after tuning, scored once. Never read by src/.",
   "channels": [
     {
       "id": "geekerwan",
@@ -168,6 +168,66 @@
       "ytQuery": "爱否科技",
       "biliUser": "爱否科技FView",
       "split": "test"
+    },
+    {
+      "id": "bidao",
+      "ytQuery": "毕导",
+      "biliUser": "毕导",
+      "split": "holdout"
+    },
+    {
+      "id": "xingqiu",
+      "ytQuery": "星球研究所",
+      "biliUser": "星球研究所",
+      "split": "holdout"
+    },
+    {
+      "id": "xiaoyuehan",
+      "ytQuery": "小约翰可汗",
+      "biliUser": "小约翰可汗",
+      "split": "holdout"
+    },
+    {
+      "id": "manshi",
+      "ytQuery": "漫士沉思录",
+      "biliUser": "漫士沉思录",
+      "split": "holdout"
+    },
+    {
+      "id": "laoshi",
+      "ytQuery": "老石谈芯",
+      "biliUser": "老石谈芯",
+      "split": "holdout"
+    },
+    {
+      "id": "linchao",
+      "ytQuery": "所长林超",
+      "biliUser": "所长林超",
+      "split": "holdout"
+    },
+    {
+      "id": "liziran",
+      "ytQuery": "李自然说",
+      "biliUser": "李自然说",
+      "split": "holdout"
+    },
+    {
+      "id": "veritasium",
+      "ytQuery": "Veritasium",
+      "biliUser": null,
+      "split": "holdout"
+    },
+    {
+      "id": "mrwhose",
+      "ytQuery": "Mrwhosetheboss",
+      "biliUser": null,
+      "split": "holdout"
+    },
+    {
+      "id": "markrober",
+      "ytQuery": "Mark Rober",
+      "biliUser": null,
+      "split": "holdout"
     }
   ]
 }

@@ -87,9 +87,18 @@ export async function installRefererRule() {
 }
 
 let wbiKeysMemo = null;
+let wbiKeysInFlight = null;
 
-async function getWbiKeys() {
-    if (wbiKeysMemo && Date.now() - wbiKeysMemo.ts < WBI_KEYS_TTL_MS) return wbiKeysMemo;
+/** Concurrent searches share one /nav request. */
+function getWbiKeys() {
+    if (wbiKeysMemo && Date.now() - wbiKeysMemo.ts < WBI_KEYS_TTL_MS) return Promise.resolve(wbiKeysMemo);
+    wbiKeysInFlight ||= loadWbiKeys().finally(() => {
+        wbiKeysInFlight = null;
+    });
+    return wbiKeysInFlight;
+}
+
+async function loadWbiKeys() {
     const stored = (await chrome.storage.local.get(WBI_KEYS_STORAGE))[WBI_KEYS_STORAGE];
     if (stored && Date.now() - stored.ts < WBI_KEYS_TTL_MS) {
         wbiKeysMemo = stored;
@@ -198,9 +207,32 @@ const userSearchCache = new Map();
 export async function searchUsers(keyword) {
     if (userSearchCache.has(keyword)) return userSearchCache.get(keyword);
     const data = await searchRaw({ search_type: 'bili_user', keyword, page: 1 });
-    const users = (data.result || []).map((u) => ({ mid: u.mid, name: u.uname, fans: u.fans || 0 }));
+    const users = (data.result || []).map(normalizeUser);
     userSearchCache.set(keyword, users);
     return users;
+}
+
+/** Uploader search item, including its few newest uploads (`res`) as candidates. */
+export function normalizeUser(u) {
+    return {
+        mid: u.mid,
+        name: u.uname,
+        fans: u.fans || 0,
+        recent: (u.res || []).map((r) => ({
+            bvid: r.bvid,
+            aid: r.aid,
+            title: cleanSearchTitle(r.title),
+            author: u.uname,
+            mid: u.mid,
+            duration: parseClock(r.duration),
+            pic: r.pic?.startsWith('//') ? `https:${r.pic}` : r.pic,
+            play: Number(r.play) || 0,
+            danmaku: Number(r.dm) || 0,
+            pubdate: r.pubdate || 0,
+            description: '',
+            tag: '',
+        })),
+    };
 }
 
 const uploaderCache = new Map();

@@ -86,7 +86,7 @@ export function scoreCandidate(yt, candidate, prepared = prepareYouTube(yt)) {
 
     let score = WEIGHTS.title * title + WEIGHTS.duration * duration + WEIGHTS.author * author;
     // Same week and same length: strong evidence even when the title was rewritten.
-    score += 0.08 * date * duration;
+    score += 0.12 * date * duration;
 
     // Only the duration agrees: likely a coincidence, not the same video.
     if (title < 0.25 && author < 0.5) score *= 0.6;

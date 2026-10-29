@@ -34,4 +34,12 @@ export function mountPanel(controller) {
     shadow.appendChild(container);
 
     createRoot(container).render(<Panel controller={controller} />);
+
+    // Machine-readable status for end-to-end tests and bug reports.
+    controller.subscribe((state) => {
+        host.dataset.status = state.status;
+        host.dataset.message = state.message || '';
+        host.dataset.match = state.match?.view.bvid || '';
+        host.dataset.danmaku = String(state.danmaku.shown || 0);
+    });
 }
