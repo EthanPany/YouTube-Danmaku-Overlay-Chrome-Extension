@@ -6,7 +6,8 @@
  *
  * It shrinks back to the button when idle (setting `autoCollapsePanel`),
  * but never once the user has hovered it, and never on mouse-out: after
- * that only the collapse button closes it.
+ * that only the collapse button closes it. Hidden entirely while the
+ * player is fullscreen.
  */
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import MatchTab, { MatchSummary } from './MatchTab';
@@ -31,6 +32,17 @@ function statusDot(state, enabled) {
     if (state.status === 'no-match') return 'warn';
     if (state.status === 'matched') return enabled ? 'ok' : '';
     return '';
+}
+
+/** True while anything (normally YouTube's player) is fullscreen. */
+function useFullscreen() {
+    const [fullscreen, setFullscreen] = useState(() => !!document.fullscreenElement);
+    useEffect(() => {
+        const onChange = () => setFullscreen(!!document.fullscreenElement);
+        document.addEventListener('fullscreenchange', onChange);
+        return () => document.removeEventListener('fullscreenchange', onChange);
+    }, []);
+    return fullscreen;
 }
 
 /** Keeps the corner position on screen. */
@@ -79,6 +91,7 @@ export default function Panel({ controller }) {
     const [dragPos, setDragPos] = useState(null);
     const touched = useRef(false); // hovered since this video opened: no more auto-collapse
     const timer = useRef(null);
+    const fullscreen = useFullscreen();
 
     // Re-open (compact) on each new video so the user sees what was matched.
     useEffect(() => {
@@ -119,7 +132,7 @@ export default function Panel({ controller }) {
     const onFabDown = useCornerDrag(pos, onMove, expand);
     const onHeaderDown = useCornerDrag(pos, onMove, null);
 
-    if (!settings || !videoId) return null;
+    if (!settings || !videoId || fullscreen) return null;
 
     const dot = <span className={`dot ${statusDot(state, enabled)}`} />;
 
