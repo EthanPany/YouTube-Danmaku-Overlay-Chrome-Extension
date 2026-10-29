@@ -6,14 +6,16 @@
 A: This Chrome extension overlays Bilibili-style danmaku (scrolling comments) on YouTube videos by automatically matching them with their Bilibili counterparts.
 
 ### Q: How does the matching work?
-A: The extension uses title similarity and video duration to find matching videos on Bilibili. It converts between Traditional and Simplified Chinese to improve matching accuracy.
+A: It searches Bilibili with several versions of the title (original, translated, the Chinese and English halves of bilingual titles) plus the channel name, and also looks through the creator's own Bilibili uploads. Results are scored on title similarity (Traditional and Simplified Chinese are treated alike), length, uploader and upload date. A video is picked automatically only when the match is confident; otherwise the panel lists the candidates so you can choose, search, or paste a BV id or link.
 
 ### Q: Why don't I see any danmaku on some videos?
 A: Danmaku will only appear if:
-1. A matching video is found on Bilibili
+1. A matching video is found on Bilibili (if none is confident, pick one under "More" in the panel)
 2. The matching video has danmaku comments
-3. The matching confidence is high enough
+3. The switch in the panel is on for this video
 4. You're not currently watching an advertisement
+
+Without a bilibili.com login, Bilibili only serves part of the comments; the Match tab says "log in to bilibili.com for more" in that case.
 
 ## Technical Issues
 
@@ -34,10 +36,10 @@ Try refreshing the page if the issue persists.
 
 ### Q: The danmaku text is hard to read
 A: You can adjust the following settings:
-1. Enable text shadow for better contrast
-2. Increase font size
-3. Adjust opacity
-4. Reduce danmaku density
+1. Turn on Bold and Outline (Display tab)
+2. Increase the font size or lower the display area to ½ or ¼ of the player
+3. Raise the smart-block level, or set a per-second cap (Filter tab)
+4. Turn off "Original colors" to show everything in white
 
 ## Feature Requests and Bug Reports
 
@@ -59,16 +61,17 @@ A: When reporting bugs, please include:
 ## Privacy and Data
 
 ### Q: What data does this extension collect?
-A: The extension:
-1. Only accesses YouTube video metadata
-2. Searches Bilibili for matching videos
-3. Retrieves danmaku comments for matched videos
-4. Does not collect or store personal information
+A: None. There is no account and nothing is sent to the developer. Settings and the list of matched videos are kept in your browser (`chrome.storage.local`).
+
+To work, the extension contacts these services directly from your browser:
+1. **Bilibili**: search keywords taken from the YouTube title and channel name, then the matched video's danmaku. It uses Bilibili's `buvid3` cookie (and creates one if missing), because Bilibili's search refuses requests without it; no other cookies are read.
+2. **SponsorBlock** (sponsor.ajay.app) and **BilibiliSponsorBlock** (bsbsb.top): the YouTube video id and the Bilibili video id, to fetch sponsor-segment times for syncing.
+3. **TypeSafe** (api.typesafe.ai), only if you turn on Jev mode and enter your own API key: the YouTube video's id, title, channel, length, upload date and a short description excerpt, plus the top Bilibili candidates.
 
 ### Q: Does it affect my YouTube account?
 A: No, the extension:
-1. Only adds a visual overlay
-2. Doesn't modify YouTube functionality
+1. Only adds an overlay and a small panel (hidden in fullscreen)
+2. Doesn't modify YouTube functionality; clicking a timestamp in a comment just seeks the video
 3. Doesn't interact with your YouTube account
 4. Can be easily disabled or removed
 

@@ -2,6 +2,7 @@ const path = require('path');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const TerserPlugin = require('terser-webpack-plugin');
+const pkg = require('./package.json');
 
 /**
  * Three bundles: the YouTube content script, the service worker and the
@@ -44,14 +45,15 @@ module.exports = (_env, argv) => {
                 patterns: [
                     {
                         from: 'src/manifest.json',
-                        // package.json is the single source of truth for version/description.
+                        // package.json is the single source of truth for version/description
+                        // (newer npm no longer exports npm_package_description).
                         transform: (content) =>
                             Buffer.from(
                                 JSON.stringify(
                                     {
                                         ...JSON.parse(content.toString()),
-                                        description: process.env.npm_package_description,
-                                        version: process.env.npm_package_version,
+                                        description: pkg.description,
+                                        version: pkg.version,
                                     },
                                     null,
                                     2

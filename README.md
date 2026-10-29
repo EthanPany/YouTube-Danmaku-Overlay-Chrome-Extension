@@ -1,17 +1,26 @@
-# YouTube Danmaku Overlay (YouTube B站弹幕同步助手)
+# YouTube→B站弹幕 (YouTube Danmaku Overlay)
 
-A Chrome extension that overlays Bilibili-style danmaku comments on YouTube videos. This extension automatically matches YouTube videos with their Bilibili counterparts and displays the danmaku comments in real-time.
+Watch YouTube with the Bilibili danmaku. Many creators post the same video on both sites, but the bullet comments only live on Bilibili. This Chrome extension finds the Bilibili upload of the YouTube video you're watching and plays its danmaku over the YouTube player, in sync.
+
+在 YouTube 上看视频，也能看到 B 站的弹幕：自动找到对应的 B 站视频，把弹幕同步叠加到播放器上。
+
+![Danmaku over a YouTube video, with the matched Bilibili upload in the corner panel](docs/store/1-overlay.png)
 
 ## Features
 
-- **Automatic matching** of the YouTube video to its Bilibili upload. It searches several title variants in parallel: the original and translated titles, the Chinese and English halves of bilingual titles, creator + title, and the YouTube ID. Results are ranked by title, length and uploader. A video is auto-selected only when the match is confident.
-- **You stay in control**: the side panel lists the top alternatives, and you can search Bilibili or paste a BV ID or link. A video you pick is remembered for that YouTube video.
-- **Full danmaku**: protobuf segments merged with the XML pool, keeping each sender's color, size and position (scrolling, top, bottom).
-- **Filters**: Bilibili's smart-block level (屏蔽等级), scrolling/top/bottom toggles, blocked words or `/regex/`, merging of repeated comments ("哈哈哈 ×12"), and a per-second cap that keeps the best comments instead of random ones.
-- **Sponsor-aware sync**: if one upload has a sponsor read the other doesn't, the timeline is remapped. Segments come from SponsorBlock / BilibiliSponsorBlock, or are detected from "空降" and "恰饭" comments. A per-video manual offset is also saved.
-- **Unobtrusive UI**: the panel tucks into a small draggable tab on the right edge when idle. Danmaku hide during ads and stay below YouTube's captions and controls.
-- **Fast**: cached matches skip the search, there are no page-wide DOM observers, and the build is minified.
-- **Optional Jev mode** (off by default): re-ranks candidates with TypeSafe's Jev model. Enable it and paste an API key in the toolbar popup.
+- **Automatic matching.** Searches Bilibili with several title variants in parallel: the original and translated titles, the Chinese and English halves of bilingual titles, creator + title, and the YouTube id. It also looks through the creator's own Bilibili uploads, which catches retitled copies. Results are ranked by title, length, uploader and upload date, and among equally good copies the one with more danmaku wins. A video is picked automatically only when the match is confident.
+- **You stay in control.** "More" lists the other candidates, and you can search Bilibili or paste a BV id or link. Your pick is remembered for that YouTube video.
+- **Full danmaku.** Protobuf segments merged with the XML pool, keeping each sender's color, size and position (scrolling, top, bottom).
+- **Clickable timestamps.** Times in comments ("空降 5:30", "12:05 高能", "5分30秒") are underlined; click one to jump there.
+- **Filters.** Bilibili's smart-block level (屏蔽等级), scrolling/top/bottom toggles, blocked words or `/regex/`, merging of repeated comments ("哈哈哈 ×12"), and a per-second cap that keeps the best comments instead of random ones.
+- **Sponsor-aware sync.** If one upload has a sponsor read the other doesn't, the timeline is remapped. Segments come from SponsorBlock / BilibiliSponsorBlock, or are detected from "空降" and "恰饭" comments. A per-video manual offset is saved too.
+- **Minimal UI.** A small card in the bottom-right corner shows only the matched video; the Match / Display / Filter / Sync tabs are behind "More". Drag it anywhere; it shrinks to a round button when idle and hides in fullscreen. Danmaku hide during ads and stay clear of YouTube's captions and controls.
+- **Fast.** Cached matches skip the search, there are no page-wide DOM observers, and the build is minified.
+- **Optional Jev mode** (off by default). TypeSafe's Jev model double-checks the top candidate: it can confirm a match the heuristics weren't sure about, or block one it's confident is wrong. Enable it and paste an API key in the toolbar popup.
+
+| Match details | Display settings | Filters |
+|---|---|---|
+| ![](docs/store/3-match-details.png) | ![](docs/store/4-display.png) | ![](docs/store/5-filter.png) |
 
 ## How It Works
 
@@ -28,12 +37,12 @@ The service worker handles everything Bilibili needs: the `buvid3` cookie, WBI r
 
 ## Matching eval
 
-`eval/` holds a held-out benchmark of real YouTube videos from 28 channels, with ground-truth Bilibili counterparts. The labels were built without the matcher and checked by hand. All requests are cached, so the eval replays offline:
+`eval/` holds a held-out benchmark of 173 real YouTube videos from 38 channels, with ground-truth Bilibili counterparts. The labels were built without the matcher and checked by hand. All requests are cached, so the eval replays offline:
 
 ```bash
 npm run eval                      # top-1 / top-3 / auto-select accuracy, dev and test splits
 npm run eval -- --split dev --verbose
-TYPESAFE_API_KEY=... npm run eval -- --jev   # compare Jev mode
+npm run eval -- --jev             # compare Jev mode; reads TYPESAFE_API_KEY from a git-ignored .env
 ```
 
 ## Installation
@@ -74,11 +83,11 @@ TYPESAFE_API_KEY=... npm run eval -- --jev   # compare Jev mode
 
 ## Usage
 
-1. Navigate to any YouTube video.
-2. The extension will automatically search for matching Bilibili videos.
-3. If a match is found, a notification popup with the Bilibili video details will appear on the page.
-4. Use the toggle in the popup to show or hide danmaku comments.
-5. Click the settings icon in the popup to customize danmaku appearance (font size, speed, opacity, density).
+1. Open any YouTube video. The panel in the bottom-right corner shows the Bilibili upload it found, and the danmaku start with the video.
+2. Use the switch in the panel to turn danmaku off for this video, or the toolbar popup to turn them off everywhere.
+3. Wrong video, or nothing found? Click **More** to pick another candidate, search Bilibili, or paste a BV id or link.
+4. Display, Filter and Sync settings are also under **More**. Drag the panel by its header to move it; **–** shrinks it to a round button.
+5. Log in to bilibili.com in the same browser to get the full comment pool.
 
 ## Development
 

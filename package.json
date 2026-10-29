@@ -1,7 +1,7 @@
 {
   "name": "youtube-danmaku-overlay",
   "version": "2.0.0",
-  "description": "A Chrome extension that overlays Bilibili danmaku comments on YouTube videos",
+  "description": "Finds the Bilibili upload of the YouTube video you're watching and plays its danmaku (弹幕) right on the player.",
   "private": false,
   "scripts": {
     "start": "webpack --mode=development --watch",
