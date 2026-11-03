@@ -11,6 +11,11 @@ describe('text normalization', () => {
         expect(normalize('ＡＢＣ１２３')).toBe('abc123');
     });
 
+    it('only strips whole noise words inside brackets', () => {
+        expect(stripNoise('Why Startups Fail (Success vs Failure)')).toBe('Why Startups Fail (Success vs Failure)');
+        expect(stripNoise('Talk (Full Interview)')).toBe('Talk');
+    });
+
     it('keeps meaningful brackets', () => {
         expect(stripNoise('【何同学】我做了个机器人')).toBe('【何同学】我做了个机器人');
     });
@@ -152,6 +157,16 @@ describe('searchForYouTube', () => {
         const { ranked } = await searchForYouTube(yt, { search, searchUsers: async () => [], uploaderVideos: async () => [] });
         expect(ranked[0].bvid).toBe('BV1');
         expect(ranked[0].hits).toBeGreaterThan(1);
+    });
+
+    it('keeps working when only the extra duration-filtered search fails', async () => {
+        const hit = { bvid: 'BV1', title: '我用100天做了一台电脑', author: '某某频道', duration: 600 };
+        const search = async (q, filters) => {
+            if (filters?.duration) throw new Error('rate limited');
+            return q === yt.titles[0] ? [hit] : Promise.reject(new Error('rate limited'));
+        };
+        const { ranked } = await searchForYouTube(yt, { search, searchUsers: async () => [], uploaderVideos: async () => [] });
+        expect(ranked[0].bvid).toBe('BV1');
     });
 
     it('surfaces an error when every query fails', async () => {

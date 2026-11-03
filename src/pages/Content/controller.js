@@ -6,7 +6,7 @@
  * Every async step checks `this.generation` so results that arrive after
  * the user navigated to another video are discarded.
  */
-import { loadSettings, saveSettings, loadVideoRecord, saveVideoRecord } from '../../shared/storage';
+import { loadSettings, saveSettings, loadVideoRecord, saveVideoRecord, matchAge } from '../../shared/storage';
 import { STORAGE_KEYS } from '../../shared/constants';
 import { parseVideoRef } from '../../shared/videoRef';
 import { log } from '../../shared/log';
@@ -21,6 +21,8 @@ import { DanmakuRenderer, toLibraryComments } from './modules/renderer';
 /** Settings that the renderer can apply without rebuilding comments. */
 const LIVE_KEYS = new Set(['opacity', 'area', 'scrollSeconds']);
 /** Settings that don't affect the overlay at all. */
+const PLAYER_WAIT_MS = 500;
+const PLAYER_WAIT_TRIES = 40;
 const EMPTY_MATCH_RECHECK_MS = 24 * 60 * 60 * 1000;
 const UI_KEYS = new Set(['autoCollapsePanel', 'panelRight', 'panelBottom', 'enabled', 'jevEnabled', 'jevApiKey']);
 const REBUILD_DEBOUNCE_MS = 150;
@@ -48,11 +50,14 @@ export class Controller {
         this.state = { ...initialState(), settings: null };
         this.listeners = new Set();
         this.generation = 0;
+        this.matchToken = 0; // the latest useMatch call; earlier ones drop their results
+        this.playerWaits = 0;
         this.raw = []; // wire-format comments for the current match
         this.sponsor = null;
         this.prepared = [];
         this.renderer = null;
         this.rebuildTimer = null;
+        this.ownWrites = []; // settings JSON this tab saved, so their echoes are ignored
     }
 
     async init() {
@@ -60,6 +65,13 @@ export class Controller {
         // Keep tabs and the toolbar popup in sync.
         chrome.storage?.onChanged?.addListener((changes, area) => {
             if (area !== 'local' || !changes[STORAGE_KEYS.SETTINGS]) return;
+            // Our own write coming back. While a slider is dragged an older echo can
+            // arrive after newer local state, and applying it would roll the slider back.
+            const written = this.ownWrites.indexOf(JSON.stringify(changes[STORAGE_KEYS.SETTINGS].newValue));
+            if (written >= 0) {
+                this.ownWrites.splice(0, written + 1);
+                return;
+            }
             const next = { ...this.state.settings, ...changes[STORAGE_KEYS.SETTINGS].newValue };
             if (JSON.stringify(next) !== JSON.stringify(this.state.settings)) this.applySettings(next, false);
         });
@@ -93,6 +105,7 @@ export class Controller {
         if (videoId === this.state.videoId) return;
         const gen = ++this.generation;
         this.teardownOverlay();
+        this.playerWaits = 0;
         this.raw = [];
         this.sponsor = null;
         this.setState({ ...initialState(), videoId });
@@ -109,21 +122,22 @@ export class Controller {
                 const view = await getVideoView({ bvid: record.bvid }).catch(() => null);
                 if (!this.isCurrent(gen)) return;
                 // An automatic pick with no danmaku is worth re-checking once a day: a copy with comments may exist now.
-                const empty = !record.manual && view?.stat?.danmaku === 0 && Date.now() - (record.ts || 0) > EMPTY_MATCH_RECHECK_MS;
+                const empty = !record.manual && view?.stat?.danmaku === 0 && Date.now() - matchAge(record) > EMPTY_MATCH_RECHECK_MS;
                 if (view && !empty) {
                     const { score, breakdown } = scoreCandidate(yt, view);
-                    await this.useMatch(gen, view, { manual: !!record.manual, score, breakdown, cid: record.cid });
+                    await this.useMatch(gen, view, { manual: !!record.manual, score, breakdown, cid: record.cid, fromCache: true });
                     return;
                 }
                 // Cached video was deleted, unavailable or empty: fall through to a fresh search.
             }
 
             await this.findCandidates(gen);
-            if (!this.isCurrent(gen)) return;
+            // The user may have picked a video (or pasted a link) while we searched.
+            if (!this.isCurrent(gen) || this.state.match) return;
             const best = this.state.candidates[0];
             if (best && this.shouldAutoAccept(best)) {
                 const view = await getVideoView({ bvid: best.bvid });
-                if (!this.isCurrent(gen)) return;
+                if (!this.isCurrent(gen) || this.state.match) return;
                 await this.useMatch(gen, view, { manual: false, score: best.score, breakdown: best.breakdown });
             } else {
                 this.setState({
@@ -180,8 +194,9 @@ export class Controller {
     }
 
     /** Loads danmaku + sponsor segments for a chosen video and renders. */
-    async useMatch(gen, view, { manual, score, breakdown, cid }) {
+    async useMatch(gen, view, { manual, score, breakdown, cid, fromCache = false }) {
         const { yt } = this.state;
+        const token = ++this.matchToken;
         const page = (cid && view.pages.find((p) => p.cid === cid)) || pickPage(view, yt?.duration);
         this.setState({
             status: 'matched',
@@ -189,13 +204,14 @@ export class Controller {
             match: { view, page, score, breakdown, manual },
             danmaku: { loading: true, source: '', total: 0, shown: 0 },
         });
-        saveVideoRecord(yt.videoId, { bvid: view.bvid, cid: page.cid, manual });
+        // Re-saving a cached match would restart its expiry on every visit.
+        if (!fromCache) saveVideoRecord(yt.videoId, { bvid: view.bvid, cid: page.cid, manual, matchedAt: Date.now() });
 
         const [danmaku, sponsor] = await Promise.all([
             getDanmaku(page.cid, view.aid, page.duration),
             getSponsorSegments(yt.videoId, view.bvid, page.cid).catch(() => null),
         ]);
-        if (!this.isCurrent(gen)) return;
+        if (!this.isCurrent(gen) || token !== this.matchToken) return;
         this.raw = danmaku.comments;
         this.sponsor = sponsor;
         log.info(`Loaded ${danmaku.comments.length} danmaku (${danmaku.source}) for ${view.bvid} p${page.page}`);
@@ -233,7 +249,12 @@ export class Controller {
         }
         const player = getPlayerElement();
         const video = getVideoElement();
-        if (!player || !video) return;
+        if (!player || !video) {
+            // Danmaku can arrive before YouTube builds the player (we start at document_start).
+            if (this.playerWaits++ < PLAYER_WAIT_TRIES) this.rebuildTimer = setTimeout(() => this.rebuild(), PLAYER_WAIT_MS);
+            return;
+        }
+        this.playerWaits = 0;
         if (!this.renderer || this.renderer.player !== player || this.renderer.video !== video) {
             this.teardownOverlay();
             this.renderer = new DanmakuRenderer(player, video);
@@ -273,7 +294,11 @@ export class Controller {
         const { match } = this.state;
         if (!match) return;
         this.teardownOverlay();
-        await this.useMatch(this.generation, match.view, { ...match, manual: true, cid });
+        try {
+            await this.useMatch(this.generation, match.view, { ...match, manual: true, cid });
+        } catch (err) {
+            this.setState({ status: 'error', message: err.message, danmaku: { ...this.state.danmaku, loading: false } });
+        }
     }
 
     /** Free-text search, or a pasted BV/av id / URL to use directly. */
@@ -307,7 +332,8 @@ export class Controller {
         try {
             await this.findCandidates();
         } catch (err) {
-            this.setState({ candidatesLoaded: true });
+            // findCandidates showed "Searching…" if nothing is matched yet; don't leave it spinning.
+            this.setState(this.state.match ? { candidatesLoaded: true } : { candidatesLoaded: true, status: 'error', message: err.message });
             log.warn('Candidate search failed', err);
         }
     }
@@ -334,7 +360,10 @@ export class Controller {
         const prev = this.state.settings;
         const changed = Object.keys(next).filter((k) => JSON.stringify(prev[k]) !== JSON.stringify(next[k]));
         this.setState({ settings: next });
-        if (persist) saveSettings(next);
+        if (persist) {
+            this.ownWrites = [...this.ownWrites.slice(-19), JSON.stringify(next)];
+            saveSettings(next);
+        }
         if (!changed.length) return;
 
         if (changed.includes('skipSponsorSegments')) this.computeAlignment();

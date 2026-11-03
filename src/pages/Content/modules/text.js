@@ -14,7 +14,11 @@ const NOISE_WORDS =
     '中字|中文字幕|中英|双语|字幕|熟肉|生肉|搬运|转载|自制|官方|授权|合集|高清|超清|蓝光|首发|独家|' +
     '4k|8k|hdr|1080p?|720p?|60fps|hd|uhd|mv|pv|official|music video|lyrics?|lyric video|' +
     'eng ?sub|cc|sub|subbed|full|live|remaster(ed)?|audio|visuali[sz]er|trailer|teaser';
-const NOISE_BRACKET_RE = new RegExp(`[【\\[(（「『]\\s*[^】\\])）」』]*?(?:${NOISE_WORDS})[^】\\])）」』]*?\\s*[】\\])）」』]`, 'gi');
+// Whole words only: "(Success vs Failure)" contains "cc" but isn't a tag.
+const NOISE_BRACKET_RE = new RegExp(
+    `[【\\[(（「『]\\s*[^】\\])）」』]*?(?<![a-z0-9])(?:${NOISE_WORDS})(?![a-z0-9])[^】\\])）」』]*?\\s*[】\\])）」』]`,
+    'gi'
+);
 /** Outside brackets only strip words that can never be part of a real title. */
 const NOISE_BARE_WORDS =
     '4k|8k|hdr|1080p|720p|60fps|official music video|official video|official mv|lyric video|eng ?sub|中字|熟肉|生肉|动态视频';

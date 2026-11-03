@@ -23,6 +23,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Content script runs on all YouTube pages and follows SPA navigation via `yt-navigate-finish`
 - Bilibili requests use WBI signing and a real buvid3 cookie
 
+### Fixed (code review)
+- A manual pick made while the automatic search or another pick was still loading could be overwritten
+- A failed duration-filtered search no longer counts as "every query failed"
+- Danmaku that arrive before YouTube builds the player are rendered once it exists
+- Changing the part (分P) or a failed on-demand search no longer leaves a spinner forever
+- Stale WBI keys are dropped and requests re-signed once instead of failing for hours
+- Automatic matches really expire after 7 days (visits no longer restart the clock)
+- Dragging a slider no longer jitters from this tab's own storage echoes
+- Bracketed title words such as "(Success vs Failure)" are no longer stripped as noise ("cc")
+
 ### Removed
 - Legacy CommentCoreLibrary scripts and unused boilerplate pages
 

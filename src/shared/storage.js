@@ -35,8 +35,12 @@ export async function saveSettings(settings) {
  * @property {boolean} manual    True when the user picked it; never expires
  * @property {number} offset     Manual sync offset in seconds
  * @property {boolean} [enabled] Per-video on/off override
+ * @property {number} [matchedAt] When bvid was chosen; automatic matches expire from here
  * @property {number} ts         Last write time
  */
+
+/** When the record's match was made (older records only have `ts`). */
+export const matchAge = (record) => record.matchedAt ?? record.ts ?? 0;
 
 /** @returns {Promise<VideoRecord|null>} */
 export async function loadVideoRecord(youtubeId) {
@@ -45,7 +49,7 @@ export async function loadVideoRecord(youtubeId) {
     try {
         const record = (await chrome.storage.local.get(key))[key];
         if (!record) return null;
-        if (!record.manual && Date.now() - record.ts > AUTO_MATCH_TTL_MS) {
+        if (!record.manual && Date.now() - matchAge(record) > AUTO_MATCH_TTL_MS) {
             // Stale automatic match: keep user prefs, force a fresh search.
             return { ...record, bvid: null, cid: null };
         }

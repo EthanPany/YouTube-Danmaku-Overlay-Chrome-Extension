@@ -119,6 +119,23 @@ async function loadWbiKeys() {
     return wbiKeysMemo;
 }
 
+/** Codes Bilibili returns (with HTTP 200) for a bad or outdated WBI signature. */
+const BAD_SIGNATURE = new Set([-403, -352]);
+
+/** Keys rotate; drop the cached pair so the next request fetches fresh ones. */
+async function invalidateWbiKeys() {
+    wbiKeysMemo = null;
+    await chrome.storage.local.remove(WBI_KEYS_STORAGE);
+}
+
+/** Signed GET, re-signed once with fresh keys if the signature is rejected. */
+async function fetchSigned(path, params) {
+    const json = await fetchJson(await signedUrl(path, params));
+    if (!BAD_SIGNATURE.has(json.code)) return json;
+    await invalidateWbiKeys();
+    return fetchJson(await signedUrl(path, params));
+}
+
 async function signedUrl(path, params) {
     const keys = await getWbiKeys();
     return `${API}${path}?${signQuery(params, keys)}`;
@@ -171,7 +188,7 @@ export function normalizeSearchItem(v) {
 async function searchOnce(params) {
     let json;
     try {
-        json = await fetchJson(await signedUrl('/x/web-interface/wbi/search/type', params));
+        json = await fetchSigned('/x/web-interface/wbi/search/type', params);
     } catch (err) {
         // WBI keys/endpoint failure: the legacy endpoint still answers with buvid3.
         json = await fetchJson(`${API}/x/web-interface/search/type?${new URLSearchParams(params)}`);
@@ -288,7 +305,7 @@ export async function getVideoView(ref) {
     // The unsigned /view endpoint now answers 412 to many clients; prefer WBI.
     const json = await limit(async () => {
         try {
-            return await fetchJson(await signedUrl('/x/web-interface/wbi/view', params));
+            return await fetchSigned('/x/web-interface/wbi/view', params);
         } catch {
             return fetchJson(`${API}/x/web-interface/view?${new URLSearchParams(params)}`);
         }

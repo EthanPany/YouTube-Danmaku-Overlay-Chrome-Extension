@@ -119,7 +119,8 @@ export async function searchForYouTube(yt, api = defaultSearchApi) {
     const bucket = durationBucket(yt.duration);
     const lists = await Promise.all([
         ...queries.map((q) => guard(api.search(q))),
-        bucket && queries[0] ? guard(api.search(queries[0], { duration: bucket })) : [],
+        // Extra lookup: its failure doesn't count towards "every query failed".
+        bucket && queries[0] ? api.search(queries[0], { duration: bucket }).catch(() => []) : [],
         api
             .search(yt.videoId)
             .then((list) => list.filter((v) => `${v.description} ${v.title}`.includes(yt.videoId)))
