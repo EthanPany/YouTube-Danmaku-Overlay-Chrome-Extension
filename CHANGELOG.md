@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Matching eval set and harness (`eval/`), unit tests
 
 ### Changed
+- Content script starts at `document_start`, and danmaku downloads get their own request pool: danmaku appear about 2.8 s after opening a video instead of about 8.5 s
 - Content script runs on all YouTube pages and follows SPA navigation via `yt-navigate-finish`
 - Bilibili requests use WBI signing and a real buvid3 cookie
 

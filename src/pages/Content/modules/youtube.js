@@ -25,19 +25,22 @@ export function getVideoIdFromUrl(href = window.location.href) {
 
 let clientVersion = null;
 
-/** Reads the live InnerTube client version from the page's inline ytcfg, once. */
+/**
+ * Reads the live InnerTube client version from the page's inline ytcfg.
+ * Remembered once found; until the page has parsed that far (the content
+ * script starts at document_start) the fallback is used.
+ */
 function getClientVersion() {
     if (clientVersion) return clientVersion;
-    clientVersion = FALLBACK_CLIENT_VERSION;
-    if (typeof document === 'undefined') return clientVersion;
+    if (typeof document === 'undefined') return FALLBACK_CLIENT_VERSION;
     for (const script of document.scripts) {
         const m = script.textContent.match(/"INNERTUBE_CLIENT_VERSION":"([\d.]+)"/);
         if (m) {
             clientVersion = m[1];
-            break;
+            return clientVersion;
         }
     }
-    return clientVersion;
+    return FALLBACK_CLIENT_VERSION;
 }
 
 /**
@@ -95,6 +98,10 @@ function readDom() {
 export async function getYouTubeMetadata(videoId, { fetchImpl = fetch, useDom = true } = {}) {
     const results = await Promise.allSettled(TITLE_LANGUAGES.map((hl) => fetchPlayerDetails(videoId, hl, fetchImpl)));
     const details = results.filter((r) => r.status === 'fulfilled' && r.value).map((r) => r.value);
+    // The DOM is only a fallback; at document_start it isn't parsed yet.
+    if (useDom && !details.length && document.readyState === 'loading') {
+        await new Promise((resolve) => document.addEventListener('DOMContentLoaded', resolve, { once: true }));
+    }
     const dom = useDom ? readDom() : { title: '', channel: '', duration: 0 };
 
     // InnerTube titles first: the on-page <h1> may be YouTube's machine

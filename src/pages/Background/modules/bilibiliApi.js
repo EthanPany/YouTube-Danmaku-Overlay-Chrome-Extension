@@ -14,8 +14,14 @@ const SEGMENT_SECONDS = 360; // seg.so returns 6-minute segments
 const WBI_KEYS_STORAGE = 'wbiKeysCache';
 const WBI_KEYS_TTL_MS = 6 * 60 * 60 * 1000;
 
-/** Bilibili answers bursts with -412; keep requests modest. */
+/** Bilibili answers search bursts with -412; keep requests modest. */
 const limit = createLimiter(4);
+/**
+ * Danmaku downloads (seg.so, the XML pool) are separate endpoints that
+ * don't trip search's rate limit, so a 25-minute video (5 segments + XML)
+ * loads in one round instead of two.
+ */
+const dmLimit = createLimiter(6);
 
 // ---------------------------------------------------------------------------
 // Session prerequisites: buvid3 cookie, Referer header, WBI keys
@@ -330,7 +336,7 @@ function compact(e) {
 async function fetchSegments(cid, aid, durationSeconds) {
     const count = Math.max(1, Math.ceil((durationSeconds || SEGMENT_SECONDS) / SEGMENT_SECONDS));
     const tasks = Array.from({ length: count }, (_, i) =>
-        limit(() =>
+        dmLimit(() =>
             fetchBytes(`${API}/x/v2/dm/web/seg.so?type=1&oid=${cid}${aid ? `&pid=${aid}` : ''}&segment_index=${i + 1}`)
         ).then(decodeDmSegment)
     );
@@ -342,7 +348,7 @@ async function fetchSegments(cid, aid, durationSeconds) {
 
 /** Legacy XML pool (max ~1000-8000 comments). No DOMParser in workers, so regex. */
 async function fetchXml(cid) {
-    const xml = await limit(() => fetchText(`https://comment.bilibili.com/${cid}.xml`));
+    const xml = await dmLimit(() => fetchText(`https://comment.bilibili.com/${cid}.xml`));
     const out = [];
     const re = /<d p="([^"]+)">([^<]*)<\/d>/g;
     let m;
