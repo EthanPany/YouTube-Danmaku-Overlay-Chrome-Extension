@@ -12,6 +12,7 @@
  * Metrics, over videos that have a Bilibili counterpart:
  *   top-1  the first-ranked candidate is correct
  *   top-3  a correct video is among the first three (what the panel lists)
+ *   top1MostDanmaku  top-1 is correct and has the most danmaku of the correct copies found
  *   auto   auto-selected AND correct;  wrong-auto  auto-selected but wrong
  * and over videos without a counterpart:
  *   false-auto  something was auto-selected anyway (shows wrong danmaku)
@@ -24,7 +25,7 @@ import { bili, cached, readJson, writeJson, EVAL_DIR, stats } from './lib/net.mj
 import { searchForYouTube } from '../src/pages/Content/modules/bilibili.js';
 import { isConfident } from '../src/pages/Content/modules/match.js';
 import { normalizeSearchItem, normalizeArchive, normalizeUser } from '../src/pages/Background/modules/bilibiliApi.js';
-import { buildJevRequest, applyJevResponse, callJev, hybridAutoAccept, JEV_TOP_K } from '../src/shared/jev.js';
+import { buildJevRequest, applyJevResponse, callJev, hybridAutoAccept, preferJevPick, JEV_TOP_K } from '../src/shared/jev.js';
 import { sify } from 'chinese-conv/dist';
 
 const args = process.argv.slice(2);
@@ -92,11 +93,18 @@ function score(items, pick, { strict = false } = {}) {
     const auto = pos.filter((i) => pick(i).auto && ok(i, pick(i).ranked[0])).length;
     const wrongAuto = items.filter((i) => pick(i).auto && !ok(i, pick(i).ranked[0])).length;
     const falseAuto = neg.filter((i) => pick(i).auto).length;
+    // Of the correct copies found, did the pick have the most danmaku? (A correct copy with none shows nothing.)
+    const mostDanmaku = pos.filter((i) => {
+        const [top] = pick(i).ranked;
+        const best = Math.max(0, ...pick(i).ranked.filter((c) => ok(i, c)).map((c) => c.danmaku || 0));
+        return ok(i, top) && (top.danmaku || 0) >= best;
+    }).length;
     return {
         n: items.length,
         positives: pos.length,
         top1: r(top1, pos.length),
         top3: r(top3, pos.length),
+        top1MostDanmaku: r(mostDanmaku, pos.length),
         recall: r(anyRank, pos.length),
         autoCorrect: r(auto, pos.length),
         wrongAuto,
@@ -118,7 +126,9 @@ async function main() {
         if (JEV && ranked.length) {
             const out = await jevRerank(yt, ranked);
             jev = { ranked: out.ranked, auto: !!out.jev?.accept && out.jev.choice === out.ranked[0]?.bvid, verdict: out.jev, ms: out.ms };
-            hybrid = { ranked, auto: hybridAutoAccept(heuristic.auto, ranked[0]?.bvid, out.jev) };
+            const promoted = preferJevPick(ranked, out.jev);
+            const confident = promoted === ranked ? heuristic.auto : isConfident(promoted);
+            hybrid = { ranked: promoted, auto: hybridAutoAccept(confident, promoted[0]?.bvid, out.jev) };
         }
         results.set(item.id, { heuristic, jev, hybrid, queries });
 

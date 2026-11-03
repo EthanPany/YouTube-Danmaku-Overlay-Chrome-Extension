@@ -1,4 +1,4 @@
-import { buildJevRequest, applyJevResponse, hybridAutoAccept, JEV_TOP_K } from '../src/shared/jev';
+import { buildJevRequest, applyJevResponse, hybridAutoAccept, preferJevPick, JEV_TOP_K } from '../src/shared/jev';
 
 const yt = { titles: ['标题'], channel: '频道', duration: 600, description: 'desc' };
 const candidates = Array.from({ length: 10 }, (_, i) => ({ bvid: `BV${i}`, title: `t${i}`, author: 'a', duration: 600 + i }));
@@ -40,5 +40,27 @@ describe('jev', () => {
         const body = buildJevRequest(yt, [{ bvid: 'BV1', title: 'T', author: 'C', duration: 610, pubdate: Date.parse('2026-10-03T17:00:00Z') / 1000 }]);
         expect(body.state.youtube_video).toMatchObject({ video_id: 'abc123', uploaded: '2026-10-01' });
         expect(body.questions.match.criteria.c1).toContain('2 days after YouTube');
+    });
+
+    test('prompt carries danmaku counts', () => {
+        const body = buildJevRequest(yt, [{ bvid: 'BV1', title: 'T', author: 'C', duration: 600, danmaku: 0 }]);
+        expect(body.questions.match.criteria.c1).toContain(', 0 danmaku');
+    });
+
+    describe('preferJevPick', () => {
+        const c = (bvid, danmaku, duration = 1) => ({ bvid, danmaku, breakdown: { duration } });
+        const ranked = [c('A', 0), c('B', 40), c('C', 900, 0.9)];
+        const verdict = (choice, accept = true) => ({ choice, accept, probability: accept ? 0.9 : 0.4 });
+
+        test('moves a confident pick with more danmaku and the same length to the front', () => {
+            expect(preferJevPick(ranked, verdict('B')).map((x) => x.bvid)).toEqual(['B', 'A', 'C']);
+        });
+
+        test('keeps the heuristic order otherwise', () => {
+            expect(preferJevPick(ranked, null)).toBe(ranked);
+            expect(preferJevPick(ranked, verdict('B', false))).toBe(ranked);
+            expect(preferJevPick(ranked, verdict('C'))).toBe(ranked); // length differs: timing would not sync
+            expect(preferJevPick([c('A', 50), c('B', 40)], verdict('B')).map((x) => x.bvid)).toEqual(['A', 'B']);
+        });
     });
 });

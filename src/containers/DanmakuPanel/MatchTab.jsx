@@ -85,6 +85,7 @@ export function MatchSummary({ state }) {
                         <span>💬 {formatCount(view.stat.danmaku)}</span>
                         <span>{formatDate(view.pubdate)}</span>
                     </div>
+                    {view.stat.danmaku === 0 && <div className="hint">No danmaku on this upload yet. Other copies are under More.</div>}
                 </div>
             </div>
         );

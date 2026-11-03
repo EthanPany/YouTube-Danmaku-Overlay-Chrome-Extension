@@ -93,9 +93,11 @@ Counts after the Jev benchmark: 173 videos, 160 with a counterpart, 13 without.
 `--jev` asks TypeSafe Jev to pick among the top 8 heuristic candidates (or "none") and scores three policies:
 - `heuristic`: the matcher alone.
 - `jev`: Jev's ranking and auto-select.
-- `hybrid`: heuristic ranking; Jev confirms an unsure top pick, and a confident "none" blocks auto-select. This is what Jev mode in the extension does.
+- `hybrid`: heuristic ranking; Jev confirms an unsure top pick, a confident "none" blocks auto-select, and a confident pick of another same-length copy with more danmaku moves to the top. This is what Jev mode in the extension does.
 
-Results on all 173 videos with the final prompt, from two independent runs (Jev is not fully deterministic):
+`top1MostDanmaku` counts videos where the top pick is correct *and* has the most danmaku of the correct copies found: a correct copy nobody commented on shows an empty overlay.
+
+Results on all 173 videos with the earlier prompt (before danmaku counts), from two independent runs (Jev is not fully deterministic):
 
 | Policy | top1 | top3 | auto-correct | wrong auto | no-match auto |
 |---|---|---|---|---|---|
@@ -103,12 +105,23 @@ Results on all 173 videos with the final prompt, from two independent runs (Jev 
 | jev | 100 | 100 | 96.3–96.9 | 0 | 0/13 |
 | hybrid | 100 | 100 | **100** | 0 | 0/13 |
 
-Holdout split only: heuristic 94.9% auto-correct, hybrid 100%. The cached responses in `cache/http` are from the second run, so `npm run eval -- --jev` replays it without a key.
+Holdout split only: heuristic 94.9% auto-correct, hybrid 100%.
+
+Current prompt (each candidate's danmaku count, "a copy with 0 danmaku is the worst choice"), one run; the cached responses in `cache/http` are from it, so `npm run eval -- --jev` replays it without a key:
+
+| Policy | top1 | top3 | top1MostDanmaku | auto-correct | wrong auto | no-match auto |
+|---|---|---|---|---|---|---|
+| heuristic | 100 | 100 | 98.8 | 98.8 | 0 | 0/13 |
+| jev | 98.1 | 100 | 97.5 | 96.3 | 3 | 0/13 |
+| hybrid | 100 | 100 | 98.8 | **100** | 0 | 0/13 |
+
+Jev alone now makes 3 wrong picks: copies 26–2600 s off in length that have more danmaku. Hybrid only promotes a Jev pick within ~12 s of the YouTube length, so none of those get through; on this set the promotion never fires, because the heuristic's own same-video tier already picks the copy with the most danmaku.
 
 - Median Jev latency was about 90 ms per video, measured from this machine. One request per newly matched video.
 - The first prompt (no upload dates, no YouTube id) made 4 confident auto-selects on "no counterpart" videos.
   - 2 were real mistakes: a two-month-older video, and a description linking another YouTube id. Adding dates and the id to the prompt fixed both.
   - The other 2, and 3 more found later, were label errors. In each, the creator's official Chinese channel (Veritasium真理元素, Mrwhosetheboss中文) had uploaded the video under a translated title, which exact-title labeling had missed. These labels were corrected.
 - A later prompt said copies are rarely uploaded before the YouTube video. That made Jev answer "none" for creators who post on Bilibili first, so it was replaced with "a gap of months suggests a different video".
+- Adding danmaku counts (after the Mark Rober / Mrwhosetheboss copies with 0 danmaku were seen live) lowered Jev-alone accuracy from 100% to 98.1%: it now favors busier copies even when the length is off.
 - The prompt changes were made after seeing these results, so the Jev numbers are tuned the same way the heuristic's are.
 

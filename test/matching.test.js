@@ -200,4 +200,15 @@ describe('danmaku count among equal matches', () => {
         const ranked = [c('A', 1.0, 0), c('B', 0.97, 500, { title: 0.2 })];
         expect(preferMoreDanmaku(ranked).map((x) => x.bvid)).toEqual(['A', 'B']);
     });
+
+    it("promotes the creator's own same-week copy despite a translated title and a lower score", () => {
+        const official = c('B', 0.7, 1, { title: 0.1, author: 0.9, date: 1 });
+        const ranked = [c('A', 0.95, 0), c('X', 0.8, 50, { title: 0.1 }), official];
+        expect(preferMoreDanmaku(ranked).map((x) => x.bvid)).toEqual(['B', 'A', 'X']);
+    });
+
+    it("does not treat the creator's upload from another week as the same video", () => {
+        const ranked = [c('A', 0.95, 0), c('B', 0.7, 300, { title: 0.1, author: 0.9, date: 0 })];
+        expect(preferMoreDanmaku(ranked).map((x) => x.bvid)).toEqual(['A', 'B']);
+    });
 });

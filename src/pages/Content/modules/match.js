@@ -133,22 +133,30 @@ export function rankCandidates(yt, candidates) {
 /** Candidates this close to the leader's (display-clamped) score count as the same match level. */
 const SAME_LEVEL_MARGIN = 0.1;
 
+/** The creator's own account, same week, same length: official Chinese channels translate the title. */
+const isCreatorCopy = (c) => c.breakdown.author >= 0.9 && c.breakdown.date >= 0.5 && c.breakdown.duration >= 0.98;
+
 /**
- * Among the leading candidates that are clearly the same video (title or an
- * explicit link agrees, and the length is within ~12 s so the timing still
- * syncs), the one with the most danmaku
- * goes first: a perfect-title copy nobody commented on is useless. Others
- * keep their score order.
+ * Clearly the same video: the title or an explicit link agrees, or it is the
+ * creator's own copy. The length must be within ~12 s so the timing syncs.
+ */
+export function isSameVideo(c) {
+    return ((c.breakdown.title >= 0.5 || c.breakdown.linked) && c.breakdown.duration >= 0.98) || isCreatorCopy(c);
+}
+
+/**
+ * Among the leading candidates that are clearly the same video, the one
+ * with the most danmaku goes first: a perfect-title copy nobody commented
+ * on is useless. Others keep their score order.
  */
 export function preferMoreDanmaku(ranked) {
     const [best] = ranked;
-    if (!best) return ranked;
-    const sameVideo = (c) => (c.breakdown.title >= 0.5 || c.breakdown.linked) && c.breakdown.duration >= 0.98;
-    if (!sameVideo(best)) return ranked;
+    if (!best || !isSameVideo(best)) return ranked;
+    // The creator's own copy scores low on a translated title but is still a peer.
     const floor = Math.min(1, best.score) - SAME_LEVEL_MARGIN;
     const tier = [];
     const rest = [];
-    for (const c of ranked) (c.score >= floor && sameVideo(c) ? tier : rest).push(c);
+    for (const c of ranked) (isSameVideo(c) && (c.score >= floor || isCreatorCopy(c)) ? tier : rest).push(c);
     // Stable sort: equal counts keep score order.
     tier.sort((a, b) => (b.danmaku || 0) - (a.danmaku || 0));
     return [...tier, ...rest];

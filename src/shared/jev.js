@@ -32,6 +32,7 @@ export function buildJevRequest(yt, candidates) {
             `Bilibili video "${clip(c.title, 120)}" by uploader "${clip(c.author || c.owner?.name, 40)}", ` +
             `duration ${clock(c.duration)}${diff !== null ? ` (${diff >= 0 ? '+' : ''}${diff}s vs YouTube)` : ''}, ` +
             `uploaded ${day(c.pubdate)}${days !== null ? ` (${days >= 0 ? `${days} days after` : `${-days} days before`} YouTube)` : ''}` +
+            (c.danmaku !== undefined ? `, ${c.danmaku} danmaku` : '') +
             (c.description ? `, description: "${clip(c.description, 160)}"` : '');
     });
     criteria.none = 'None of these Bilibili videos is the same video as the YouTube video';
@@ -56,7 +57,8 @@ export function buildJevRequest(yt, candidates) {
                     'differ by a sponsor segment that was cut or added. Copies usually go up within a few weeks of the YouTube ' +
                     'upload, and creators sometimes post on Bilibili first; a gap of months suggests a different video. A Bilibili description that links a different YouTube video id is a different ' +
                     'video. A different episode, a reaction, a clip or a compilation is not the same video. If several candidates are ' +
-                    'the same video, choose the creator’s own upload (it has the most danmaku) over reuploads.',
+                    'the same video, choose the one with the most danmaku (the comments are what the viewer wants), usually the creator’s ' +
+                    'own upload; a copy with 0 danmaku is the worst choice.',
                 criteria,
             },
         },
@@ -86,7 +88,7 @@ export function applyJevResponse(candidates, response) {
 }
 
 /**
- * Hybrid auto-select used in Jev mode: the heuristic ranking stays, Jev can
+ * Hybrid auto-select used in Jev mode (after preferJevPick): the heuristic ranking stays, Jev can
  * confirm a top pick the heuristic was unsure about, and a confident "none"
  * from Jev blocks auto-select. Jev preferring a different candidate is not a
  * veto, because that is usually another copy of the same video.
@@ -95,6 +97,19 @@ export function hybridAutoAccept(heuristicConfident, topBvid, jev) {
     if (!jev) return heuristicConfident;
     if (!jev.choice && jev.probability >= JEV_ACCEPT_PROBABILITY) return false;
     return heuristicConfident || (jev.accept && jev.choice === topBvid);
+}
+
+/**
+ * Jev confidently picked another copy than the heuristic leader: if that copy
+ * has more danmaku and the same length (within ~12 s, so the timing syncs), it goes first, since it is the same
+ * video with more to show. Otherwise the heuristic order stands.
+ */
+export function preferJevPick(ranked, jev) {
+    const [best] = ranked;
+    if (!best || !jev?.accept || jev.choice === best.bvid) return ranked;
+    const pick = ranked.find((c) => c.bvid === jev.choice);
+    if (!pick || (pick.danmaku || 0) <= (best.danmaku || 0) || !(pick.breakdown?.duration >= 0.98)) return ranked;
+    return [pick, ...ranked.filter((c) => c !== pick)];
 }
 
 /** Raw HTTP call (service worker / Node). */

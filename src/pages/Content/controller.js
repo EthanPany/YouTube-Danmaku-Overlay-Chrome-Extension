@@ -12,7 +12,7 @@ import { parseVideoRef } from '../../shared/videoRef';
 import { log } from '../../shared/log';
 import { getYouTubeMetadata, getPlayerElement, getVideoElement } from './modules/youtube';
 import { searchForYouTube, manualSearch, getVideoView, getDanmaku, getSponsorSegments, pickPage, jevRank } from './modules/bilibili';
-import { buildJevRequest, applyJevResponse, hybridAutoAccept } from '../../shared/jev';
+import { buildJevRequest, applyJevResponse, hybridAutoAccept, preferJevPick } from '../../shared/jev';
 import { isConfident, scoreCandidate } from './modules/match';
 import { prepareComments } from './modules/danmakuFilter';
 import { planAlignment, createTimeMap } from './modules/alignment';
@@ -21,6 +21,7 @@ import { DanmakuRenderer, toLibraryComments } from './modules/renderer';
 /** Settings that the renderer can apply without rebuilding comments. */
 const LIVE_KEYS = new Set(['opacity', 'area', 'scrollSeconds']);
 /** Settings that don't affect the overlay at all. */
+const EMPTY_MATCH_RECHECK_MS = 24 * 60 * 60 * 1000;
 const UI_KEYS = new Set(['autoCollapsePanel', 'panelRight', 'panelBottom', 'enabled', 'jevEnabled', 'jevApiKey']);
 const REBUILD_DEBOUNCE_MS = 150;
 
@@ -107,12 +108,14 @@ export class Controller {
             if (record?.bvid) {
                 const view = await getVideoView({ bvid: record.bvid }).catch(() => null);
                 if (!this.isCurrent(gen)) return;
-                if (view) {
+                // An automatic pick with no danmaku is worth re-checking once a day: a copy with comments may exist now.
+                const empty = !record.manual && view?.stat?.danmaku === 0 && Date.now() - (record.ts || 0) > EMPTY_MATCH_RECHECK_MS;
+                if (view && !empty) {
                     const { score, breakdown } = scoreCandidate(yt, view);
                     await this.useMatch(gen, view, { manual: !!record.manual, score, breakdown, cid: record.cid });
                     return;
                 }
-                // Cached video was deleted or is unavailable: fall through to a fresh search.
+                // Cached video was deleted, unavailable or empty: fall through to a fresh search.
             }
 
             await this.findCandidates(gen);
@@ -146,8 +149,9 @@ export class Controller {
             if (!this.isCurrent(gen)) return;
             const jev = await this.maybeJevVerdict(yt, heuristic);
             if (!this.isCurrent(gen)) return;
-            log.debug(`Search took ${Math.round(performance.now() - started)} ms`, queries, heuristic.slice(0, 5), jev);
-            this.setState({ queries, candidates: heuristic.slice(0, 10), candidatesLoaded: true, jev });
+            const ranked = preferJevPick(heuristic, jev);
+            log.debug(`Search took ${Math.round(performance.now() - started)} ms`, queries, ranked.slice(0, 5), jev);
+            this.setState({ queries, candidates: ranked.slice(0, 10), candidatesLoaded: true, jev });
         } finally {
             if (this.isCurrent(gen)) this.setState({ candidatesLoading: false });
         }
@@ -155,8 +159,9 @@ export class Controller {
 
     /**
      * Jev mode (off by default): ask TypeSafe Jev about the top candidates.
-     * The heuristic ranking is kept; the verdict only feeds auto-select
-     * (see hybridAutoAccept), which scored best in the eval.
+     * The heuristic ranking is kept, except that Jev can promote a copy with
+     * more danmaku (preferJevPick); otherwise the verdict only feeds
+     * auto-select (hybridAutoAccept), which scored best in the eval.
      */
     async maybeJevVerdict(yt, ranked) {
         const { jevEnabled, jevApiKey } = this.state.settings;
